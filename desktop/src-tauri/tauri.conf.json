@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Bird",
+  "version": "1.9.0",
+  "identifier": "cc.zigmoon.bird",
+  "build": {
+    "beforeDevCommand": "node scripts/stage.mjs",
+    "beforeBuildCommand": "node scripts/stage.mjs",
+    "frontendDist": "../webapp"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Bird — Éditeur vectoriel",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "dragDropEnabled": false,
+        "theme": "Light"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Éditeur vectoriel local-first",
+    "longDescription": "Bird est un studio de dessin vectoriel local-first : Bézier, calques, plans de travail multiples, plug-ins, import PDF/AI/EPS et export PDF/X-1a prêt pour l'imprimeur.",
+    "copyright": "© Zigmoon",
+    "fileAssociations": [
+      {
+        "ext": ["plume", "bird"],
+        "name": "Projet Bird",
+        "description": "Document Bird",
+        "mimeType": "application/json",
+        "role": "Editor"
+      }
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "wix": {
+        "language": "fr-FR"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  }
+}

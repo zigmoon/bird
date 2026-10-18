@@ -14,7 +14,7 @@
 <link rel="alternate" type="text/plain" title="LLMs manifest" href="llms.txt">
 <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=1.9.0">
 <style>
   .toolbar { position: relative; }
   .canvas-container { position: relative; }
@@ -36,7 +36,7 @@
     </div>
     <div class="splash-info">
       <div class="splash-subtitle">LOCAL-FIRST VECTOR STUDIO</div>
-      <div class="splash-version">v1.7 — Multi-plans · PDF multipage · PDF/X</div>
+      <div class="splash-version">v1.9 — PDF/X-1a · CMJN · texte en courbes</div>
       <div class="splash-section">
         <div class="splash-label">Créateurs</div>
         <div class="splash-text">Simon Dupont-Gellert</div>
@@ -118,18 +118,22 @@
         </button>
       </div>
       <span class="toolbar-divider"></span>
+      <!-- Icônes reprises de SuperPrint : mêmes repères visuels d'une app à l'autre -->
       <button class="btn btn-square is-on" id="btnRulers" type="button" title="Règles (Ctrl+R) — afficher ou masquer" aria-label="Règles" aria-pressed="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="5"/><path d="M6 3v2M10 3v3M14 3v2M18 3v3"/><path d="M3 12h4M3 16h6M3 20h3"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3V3z"/><path d="M3 7h3M3 11h2M3 15h3M3 19h2" stroke-width="1.5" stroke-linecap="round"/><path d="M7 3v3M11 3v2M15 3v3M19 3v2" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <button class="btn btn-square" id="btnGrid" type="button" title="Grille (Ctrl+') — afficher ou masquer" aria-label="Grille" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       </button>
       <button class="btn btn-square is-on" id="btnSnap" type="button" title="Magnétisme (Ctrl+;) — repères, grille et objets" aria-label="Magnétisme" aria-pressed="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 8h4M14 8h4"/><path d="M12 17v4"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 8h4M14 8h4"/><path d="M12 17v4"/></svg>
       </button>
       <span class="toolbar-divider"></span>
+      <button class="btn btn-square" id="btnVectorTools" type="button" title="Outils vectoriels" aria-label="Outils vectoriels">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8.3 8.7 20 20"/><path d="M8.3 15.3 20 4"/></svg>
+      </button>
       <button class="btn btn-square" id="btnPlugins" type="button" title="Plug-ins" aria-label="Plug-ins">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4M15 3v4"/><path d="M7 7h10v5a5 5 0 0 1-10 0V7z"/><path d="M12 17v4"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.5h6v4h4v6h-4v7H9v-7H5v-6h4z"/></svg>
       </button>
       <button class="btn btn-ai" id="btnAI" title="Créer un dessin vectoriel avec l’IA" aria-haspopup="dialog">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 1.2 4.1L15 7.5l-3.8 1.4L10 13l-1.2-4.1L5 7.5l3.8-1.4L10 2Z"/><path d="m16 12 .7 2.3L19 15l-2.3.7L16 18l-.7-2.3L13 15l2.3-.7L16 12Z"/></svg>
@@ -138,22 +142,12 @@
     </div>
 
     <div class="topbar-right">
-      <div class="zoom-cluster">
-        <button class="btn btn-square" id="btnZoomOut" title="Zoom −" aria-label="Zoom arrière">−</button>
-        <span class="zoom-readout" id="zoomReadout">100%</span>
-        <button class="btn btn-square" id="btnZoomIn" title="Zoom +" aria-label="Zoom avant">+</button>
-        <button class="btn btn-square" id="btnFit" title="Ajuster à l'écran (Maj+1)" aria-label="Ajuster à l'écran">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
-        </button>
-        <button class="btn btn-square" id="btnZoomSel" title="Zoom sur la sélection (Maj+2)" aria-label="Zoom sur la sélection">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6M11 8v6M8 11h6"/></svg>
-        </button>
-      </div>
       <div class="export-menu" id="exportMenu">
         <button class="btn btn-primary" id="btnExport" title="Exporter le document">EXPORT ▾</button>
         <div class="export-list" id="exportList" hidden>
           <button class="export-item" data-export="svg">SVG — vectoriel</button>
           <button class="export-item" data-export="pdf">PDF — vectoriel (Illustrator)</button>
+          <button class="export-item" data-export="pdfx">PDF/X-1a — imprimeur (CMJN)</button>
           <button class="export-item" data-export="png">PNG — transparent</button>
           <button class="export-item" data-export="jpg">JPG — fond blanc</button>
           <button class="export-item" data-export="webp">WEBP</button>
@@ -575,6 +569,49 @@
           </div>
         </div>
 
+        <div class="props-section" data-section="tools">
+          <h3>Outils vectoriels</h3>
+          <p class="section-note">Les opérations d'Illustrator : elles agissent sur la sélection et produisent de vrais objets.</p>
+          <div class="btn-row">
+            <button class="btn" id="toolOutlineText" title="Convertir le texte en courbes (aucune police requise à l'impression)">Texte → courbes</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="toolOutlineStroke" title="Transformer le contour en forme fermée">Contour de trait</button>
+            <button class="btn" id="toolSimplify" title="Réduire le nombre de points du tracé">Simplifier</button>
+          </div>
+          <div class="field-row">
+            <label>Décalage</label>
+            <input type="range" id="offsetAmount" min="-40" max="40" step="0.5" value="4">
+            <span class="value" id="offsetAmountVal">4</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="toolOffset" title="Décaler le tracé vers l'extérieur (valeur positive) ou l'intérieur">Décaler le tracé</button>
+          </div>
+          <div class="field-row">
+            <label>Blend</label>
+            <input type="range" id="blendSteps" min="1" max="20" step="1" value="5">
+            <span class="value" id="blendStepsVal">5</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="toolBlend" title="Interpoler entre deux objets sélectionnés">Blend</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="toolSymbolCreate" title="Créer un symbole à partir de la sélection">Créer un symbole</button>
+            <button class="btn" id="toolSymbolPlace" title="Placer une instance du dernier symbole">Placer</button>
+          </div>
+          <div class="symbols-list" id="symbolsList"></div>
+        </div>
+
+        <div class="props-section" data-section="fonts">
+          <h3>Polices</h3>
+          <p class="section-note">Chargez des .ttf/.otf pour que le texte devienne des courbes exactes à l'export.</p>
+          <div class="fonts-list" id="fontsList"></div>
+          <div class="btn-row">
+            <button class="btn" id="fontsAdd" title="Charger un fichier de police">Charger une police…</button>
+          </div>
+          <input type="file" id="fontsFile" accept=".ttf,.otf,.woff,.woff2" hidden>
+        </div>
+
         <div class="props-section" data-section="plugins" id="section-plugins">
           <h3>Plug-ins</h3>
           <p class="section-note">Étendez Bird avec des modules. Les plug-ins actifs s’ajoutent à la barre d’outils.</p>
@@ -606,6 +643,19 @@
 
 <!-- Calque des widgets détachables -->
 <div class="widgets-layer" id="widgetsLayer"></div>
+
+<!-- Widget Zoom (bas droite) — même position que dans SuperPrint -->
+<div class="zoom-widget" id="zoomWidget">
+  <button class="btn btn-square zw-btn" id="btnZoomOut" title="Zoom −" aria-label="Zoom arrière">−</button>
+  <input type="text" id="zoomReadout" value="100%" title="Cliquer pour saisir un zoom (5–6400 %)" inputmode="decimal" aria-label="Niveau de zoom">
+  <button class="btn btn-square zw-btn" id="btnZoomIn" title="Zoom +" aria-label="Zoom avant">+</button>
+  <button class="btn btn-square zw-btn" id="btnFit" title="Ajuster à l'écran (Maj+1)" aria-label="Ajuster à l'écran">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+  </button>
+  <button class="btn btn-square zw-btn" id="btnZoomSel" title="Zoom sur la sélection (Maj+2)" aria-label="Zoom sur la sélection">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6M11 8v6M8 11h6"/></svg>
+  </button>
+</div>
 
 <!-- Tiroir des plug-ins -->
 <div class="plugin-drawer" id="pluginDrawer" hidden>
@@ -705,6 +755,7 @@
       <div class="export-formats" id="exportFormats" role="radiogroup" aria-label="Format d’export">
         <button class="export-format active" data-format="svg" type="button"><b>SVG</b><small>Vectoriel web</small></button>
         <button class="export-format" data-format="pdf" type="button"><b>PDF</b><small>Illustrator / print</small></button>
+        <button class="export-format" data-format="pdfx" type="button"><b>PDF/X-1a</b><small>CMJN · imprimeur</small></button>
         <button class="export-format" data-format="png" type="button"><b>PNG</b><small>Transparent</small></button>
         <button class="export-format" data-format="jpg" type="button"><b>JPG</b><small>Fond blanc</small></button>
         <button class="export-format" data-format="webp" type="button"><b>WEBP</b><small>Web léger</small></button>
@@ -733,6 +784,56 @@
           </select>
         </label>
         <div class="export-field export-readout"><span>Taille</span><b id="exportSize">—</b></div>
+      </div>
+
+      <!-- Réglages d'imprimerie : visibles uniquement en PDF/X -->
+      <div class="export-print" id="exportPrint" hidden>
+        <div class="export-print-head">
+          <span>IMPRIMERIE</span>
+          <span class="export-print-tag">PDF/X-1a:2001</span>
+        </div>
+        <div class="export-grid">
+          <label class="export-field"><span>Fond perdu</span>
+            <select id="exportBleed">
+              <option value="0">Aucun</option>
+              <option value="3">3 px</option>
+              <option value="9">9 px (3 mm)</option>
+              <option value="12">12 px (4 mm)</option>
+              <option value="18">18 px (6 mm)</option>
+            </select>
+          </label>
+          <label class="export-field"><span>Noir de soutien</span>
+            <select id="exportGcr">
+              <option value="0">Aucun (noir composite)</option>
+              <option value="0.6" selected>Standard</option>
+              <option value="1">Maximum (textes fins)</option>
+            </select>
+          </label>
+          <label class="export-field"><span>Taux d’encre</span>
+            <select id="exportInk">
+              <option value="2.4">240 % (journaux)</option>
+              <option value="3" selected>300 % (standard)</option>
+              <option value="3.3">330 % (couche)</option>
+            </select>
+          </label>
+          <label class="export-field"><span>Texte</span>
+            <select id="exportOutlineText">
+              <option value="1" selected>Vectoriser (courbes)</option>
+              <option value="0">Conserver le texte</option>
+            </select>
+          </label>
+        </div>
+        <div class="export-icc" id="exportIcc">
+          <div class="export-icc-info">
+            <b id="exportIccName">Bird CMYK (générique)</b>
+            <small id="exportIccHint">Chargez le profil ICC de votre imprimeur pour un PDF/X de production.</small>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="exportIccLoad" type="button">Charger un .icc…</button>
+            <button class="btn" id="exportIccReset" type="button" title="Revenir au profil générique">Défaut</button>
+          </div>
+          <input type="file" id="exportIccFile" accept=".icc,.icm,application/vnd.iccprofile" hidden>
+        </div>
       </div>
       <p class="export-note" id="exportNote">Le SVG conserve les objets, le texte et les dégradés.</p>
       <div class="export-actions">
@@ -816,11 +917,15 @@
 <!-- Toast -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="js/fabric.min.js"></script>
-<script src="js/paper-full.min.js"></script>
-<script src="js/io.js"></script>
-<script src="js/widgets.js"></script>
-<script src="js/plugins.js"></script>
-<script src="js/app.js"></script>
+<script src="js/fabric.min.js?v=1.9.0"></script>
+<script src="js/paper-full.min.js?v=1.9.0"></script>
+<script src="js/opentype.min.js?v=1.9.0"></script>
+<script src="js/io.js?v=1.9.0"></script>
+<script src="js/icc.js?v=1.9.0"></script>
+<script src="js/pdfx.js?v=1.9.1"></script>
+<script src="js/vector-tools.js?v=1.9.0"></script>
+<script src="js/widgets.js?v=1.9.0"></script>
+<script src="js/plugins.js?v=1.9.0"></script>
+<script src="js/app.js?v=1.9.0"></script>
 </body>
 </html>

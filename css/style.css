@@ -1373,3 +1373,107 @@ input[type="range"]::-webkit-slider-thumb {
 .pdf-pages-total { font-family: 'IBM Plex Mono', monospace; color: #9a9a9a; }
 .pdf-pages-note { margin: 4px 0 0; font-size: 9px; color: #9a9a9a; font-family: 'IBM Plex Mono', monospace; }
 .pdf-pages-actions { padding: 0 14px 14px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   WIDGET ZOOM (bas droite) — même place que dans SuperPrint.
+   La sidebar de droite le POUSSE : une seule variable, publiée par
+   resizeCanvas(), et la même durée/courbe que le panneau, sinon le
+   widget part en avance et revient (mesuré dans SuperPrint).
+   ═══════════════════════════════════════════════════════════════ */
+.zoom-widget {
+  position: fixed;
+  bottom: 16px;
+  right: max(16px, calc(var(--bird-sidebar-r, 56px) + 16px));
+  z-index: 90;
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, .96);
+  border: 1px solid rgba(0, 0, 0, .12);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+  backdrop-filter: saturate(1.2) blur(2px);
+  transition: right .26s cubic-bezier(.2, .7, .2, 1);
+}
+.zoom-widget .zw-btn {
+  width: 26px; height: 26px; min-width: 26px;
+  border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: #1a1a1a;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.zoom-widget .zw-btn:hover { background: #f1f1f1; border-color: #e6e6e6; }
+.zoom-widget .zw-btn svg { width: 13px; height: 13px; }
+.zoom-widget #zoomReadout {
+  width: 52px; height: 26px; padding: 0 2px;
+  border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: #1a1a1a;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px;
+  text-align: center;
+}
+.zoom-widget #zoomReadout:hover { background: #f7f7f7; border-color: #e6e6e6; }
+.zoom-widget #zoomReadout:focus {
+  outline: none; background: #fff; border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, .15);
+}
+/* La sidebar de droite est ouverte : on lit sa largeur réelle. */
+.props:not(.collapsed) ~ .expand-btn { display: block; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EXPORT PDF/X — réglages d'imprimerie
+   ═══════════════════════════════════════════════════════════════ */
+.export-formats { grid-template-columns: repeat(6, 1fr); }
+.export-print {
+  border: 1px solid #e8e8e8; border-radius: 5px;
+  padding: 10px 11px 11px; background: #fcfcfc;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.export-print-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 8px; letter-spacing: .16em; text-transform: uppercase; color: #999;
+}
+.export-print-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .04em;
+  text-transform: none; color: #1677ff; background: #eef4ff;
+  border: 1px solid #d8e6ff; border-radius: 3px; padding: 1px 5px;
+}
+.export-print .export-grid { grid-template-columns: repeat(2, 1fr); gap: 9px 10px; }
+.export-icc {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding-top: 9px; border-top: 1px dashed #e4e4e4;
+}
+.export-icc-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.export-icc-info b { font-size: 10px; font-weight: 500; color: #1a1a1a; }
+.export-icc-info small { font-size: 8.5px; color: #9a9a9a; line-height: 1.45; }
+.export-icc .btn-row { margin: 0; flex: 0 0 auto; }
+.export-icc .btn-row .btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════════════
+   OUTILS VECTORIELS + POLICES
+   ═══════════════════════════════════════════════════════════════ */
+.symbols-list, .fonts-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 150px; overflow-y: auto;
+}
+.symbol-row, .font-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 3px; font-size: 10px;
+  border: 1px solid transparent; color: #1a1a1a;
+}
+.symbol-row:hover, .font-row:hover { background: #f7f7f7; border-color: #eee; }
+.font-row .font-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.font-row .font-glyphs { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: #9a9a9a; }
+.font-row.is-missing { color: #a12622; }
+.symbol-row .symbol-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty-inline { font-size: 9.5px; color: #aaa; padding: 4px 2px; }
+
+/* Marqueur d'outil actif dans la barre haute */
+.btn-square.is-on { background: #eef4ff; border-color: #cfe1ff; color: #1677ff; }
+.btn-square.is-on:hover { background: #e3edff; }
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE : le widget zoom ne doit jamais passer sous la barre
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+  .zoom-widget { bottom: 10px; right: 10px; padding: 3px 4px; }
+  .zoom-widget #zoomReadout { width: 44px; }
+  .export-formats { grid-template-columns: repeat(3, 1fr); }
+}

@@ -101,12 +101,21 @@ const state = {
   exportFormat: 'svg',
   exportScope: 'document',
 
+  // impression (PDF/X)
+  cmykGcr: 0.6,               // génération de noir
+  cmykInkLimit: 3.0,          // taux d'encre max (300 %)
+  iccProfile: null,           // { bytes, name, components } chargé par l'utilisateur
+  pdfxBleed: 0,               // fond perdu en px
+
   // nuancier (persistant)
   swatches: ['#000000','#ffffff','#1a1a1a','#4f8cff','#ff6b6b','#4ade80','#facc15','#c084fc','#f97316','#22d3ee','#94a3b8','#ef4444'],
 
   // historique
   undo: [],
-  redo: []
+  redo: [],
+
+  // symboles (composants)
+  symbols: []
 };
 
 let canvas = null;
@@ -238,6 +247,8 @@ function init() {
   bindGuides();
   bindViewToggles();
   bindPages();
+  bindVectorTools();
+  observeSidebar();
   mountShellExtras();
   canvas.on('after:render', scheduleOverlayUpdate);
   scheduleOverlayUpdate();
@@ -2079,7 +2090,14 @@ function fitView() {
 }
 
 function updateZoomUI() {
-  els.zoomReadout.textContent = Math.round(state.zoom * 100) + '%';
+  const el = els.zoomReadout;
+  if (!el) return;
+  const text = Math.round(state.zoom * 100) + '%';
+  // Le champ est un vrai input (zoom saisissable) : on ne l'écrase pas
+  // pendant que l'utilisateur tape dedans.
+  if (document.activeElement === el) return;
+  if ('value' in el) el.value = text;
+  else el.textContent = text;
 }
 
 function startPan(opt) {
@@ -2416,6 +2434,7 @@ function bindProps() {
   $('btnZoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
   $('btnFit').addEventListener('click', fitView);
   $('btnZoomSel').addEventListener('click', zoomToSelection);
+  bindZoomReadout();
   bindExportMenu();
   $('btnSave').addEventListener('click', saveFile);
   $('btnOpen').addEventListener('click', () => els.fileOpen.click());
@@ -2455,9 +2474,11 @@ function objectLabel(o) {
 function renderLayers() {
   const list = $('layersList');
   if (!list) return;
-  const objects = canvas.getObjects();
+  // `filter(Boolean)` : un objet invalide glissé dans le canvas ne doit pas
+  // faire tomber tout le panneau (ni, en cascade, la sélection et l'export).
+  const objects = canvas.getObjects().filter(Boolean);
   const active = canvas.getActiveObject();
-  const activeSet = new Set(canvas.getActiveObjects());
+  const activeSet = new Set(canvas.getActiveObjects().filter(Boolean));
   list.innerHTML = '';
   if (!objects.length) {
     const empty = document.createElement('div');
@@ -2800,6 +2821,38 @@ function bindViewToggles() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   COQUILLE NATIVE (Tauri) — macOS / Windows / Linux
+   Le moteur est le même que dans le navigateur ; la coquille apporte
+   le disque natif et une vraie fenêtre. Ici on ne fait qu'adapter
+   l'affichage : libellé ⌘ sur macOS, version réelle du binaire.
+════════════════════════════════════════════════════════════ */
+function detectNativeShell() {
+  const tauri = window.__TAURI__;
+  if (!tauri) return;
+  document.documentElement.dataset.shell = 'native';
+  const platform = (tauri.os && tauri.os.platform) ||
+    (navigator.userAgentData && navigator.userAgentData.platform) ||
+    navigator.platform || '';
+  const isMac = /mac/i.test(platform);
+  document.documentElement.dataset.platform = isMac ? 'mac' : (/win/i.test(platform) ? 'windows' : 'linux');
+  // Toutes les aides « Ctrl » deviennent « ⌘ » sur macOS : c'est ce que
+  // l'utilisateur a sous les doigts, pas une convention théorique.
+  if (isMac) {
+    document.querySelectorAll('.empty-hint .kbd, kbd').forEach(el => {
+      if (el.textContent.trim() === 'Ctrl') el.textContent = '⌘';
+    });
+    const title = document.querySelector('.empty-hint .kbd');
+    if (title) title.innerHTML = title.innerHTML.replace(/Ctrl/g, '⌘');
+  }
+  if (tauri.core && typeof tauri.core.invoke === 'function') {
+    tauri.core.invoke('app_info').then(info => {
+      Bird.native = info;
+      document.title = 'Bird ' + info.version + ' — Éditeur vectoriel';
+    }).catch(() => {});
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    SHELL : widgets détachables + plug-ins
    Les deux systèmes vivent dans leurs propres fichiers
    (js/widgets.js, js/plugins.js) et ne reçoivent ici que des
@@ -2836,6 +2889,373 @@ function mountShellExtras() {
   if (window.BirdPlugins) {
     try { BirdPlugins.init(); } catch (e) { console.warn('[bird plugins]', e); }
   }
+  detectNativeShell();
+}
+
+/* ════════════════════════════════════════════════════════════
+   WIDGET ZOOM — position publiée pour que la sidebar le pousse
+════════════════════════════════════════════════════════════ */
+function publishSidebarWidth() {
+  if (!els.rightSidebar) return;
+  const w = Math.round(els.rightSidebar.getBoundingClientRect().width) || 56;
+  document.documentElement.style.setProperty('--bird-sidebar-r', w + 'px');
+}
+
+/* La largeur est publiée en continu : la sidebar s'anime, et le widget de
+   zoom doit la suivre image par image, pas seulement à l'arrivée. */
+function observeSidebar() {
+  if (!els.rightSidebar || typeof ResizeObserver === 'undefined') {
+    publishSidebarWidth();
+    return;
+  }
+  if (els.rightSidebar.__birdObserved) return;
+  els.rightSidebar.__birdObserved = true;
+  const ro = new ResizeObserver(() => publishSidebarWidth());
+  ro.observe(els.rightSidebar);
+  publishSidebarWidth();
+}
+
+/* Le pourcentage de zoom est saisissable, comme dans SuperPrint. */
+function bindZoomReadout() {
+  const input = els.zoomReadout;
+  if (!input || !('value' in input)) return;
+  const commit = () => {
+    const raw = String(input.value).replace(/[^\d.,]/g, '').replace(',', '.');
+    const pct = parseFloat(raw);
+    if (isFinite(pct) && pct > 0) {
+      setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pct / 100)));
+    }
+    updateZoomUI();
+    input.blur();
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); updateZoomUI(); input.blur(); }
+  });
+  input.addEventListener('blur', commit);
+  input.addEventListener('focus', () => input.select());
+}
+
+/* ════════════════════════════════════════════════════════════
+   OUTILS VECTORIELS (le panneau, pas les mathématiques)
+════════════════════════════════════════════════════════════ */
+function selectedObjects() {
+  const objs = canvas.getActiveObjects();
+  return objs.length ? objs : [];
+}
+
+function requireSelection(count) {
+  const objs = selectedObjects();
+  if (!objs.length) { toast('Sélectionnez un objet', true); return null; }
+  if (count && objs.length < count) {
+    toast('Sélectionnez ' + count + ' objets', true);
+    return null;
+  }
+  return objs;
+}
+
+function replaceObject(oldObj, newObj, label) {
+  if (!newObj) return;
+  beginTxn();
+  const index = canvas.getObjects().indexOf(oldObj);
+  canvas.remove(oldObj);
+  if (index >= 0) canvas.insertAt(newObj, index, false);
+  else canvas.add(newObj);
+  newObj.setCoords();
+  canvas.setActiveObject(newObj);
+  commitUndo(label);
+  refreshActiveSelection();
+  renderLayers();
+  setDirty(true);
+}
+
+function bindVectorTools() {
+  const outlineTextBtn = $('toolOutlineText');
+  if (outlineTextBtn) outlineTextBtn.addEventListener('click', () => {
+    const objs = requireSelection();
+    if (!objs) return;
+    let done = 0, failed = [];
+    objs.slice().forEach(obj => {
+      try {
+        beginTxn();
+        const result = BirdVector.vectorizeTextObject(canvas, obj, { silent: true });
+        if (result) { commitUndo('Texte en courbes'); done++; }
+        else failed.push(obj.fontFamily || 'police inconnue');
+      } catch (e) { failed.push(e.message); }
+    });
+    if (done) {
+      renderLayers(); setDirty(true);
+      toast(done + (done > 1 ? ' textes convertis' : ' texte converti') + ' en courbes ✓');
+    }
+    if (failed.length) toast('Police non chargée : ' + failed[0], true);
+  });
+
+  const outlineBtn = $('toolOutlineStroke');
+  if (outlineBtn) outlineBtn.addEventListener('click', () => {
+    const objs = requireSelection();
+    if (!objs) return;
+    objs.slice().forEach(obj => {
+      try {
+        const result = BirdVector.outlineStroke(obj);
+        replaceObject(obj, result, 'Contour de trait');
+      } catch (e) { toast(e.message || 'Contour impossible', true); }
+    });
+    toast('Contour vectorisé ✓');
+  });
+
+  const simplifyBtn = $('toolSimplify');
+  if (simplifyBtn) simplifyBtn.addEventListener('click', () => {
+    const objs = requireSelection();
+    if (!objs) return;
+    objs.slice().forEach(obj => {
+      try {
+        const result = BirdVector.simplifyPath(obj, 2);
+        const before = result.birdSimplified ? result.birdSimplified.before : 0;
+        replaceObject(obj, result, 'Simplification');
+        const after = result.birdSimplified ? result.birdSimplified.after : 0;
+        toast('Simplifié : ' + before + ' → ' + after + ' points');
+      } catch (e) { toast(e.message || 'Simplification impossible', true); }
+    });
+  });
+
+  const offsetRange = $('offsetAmount');
+  if (offsetRange) {
+    const out = $('offsetAmountVal');
+    const sync = () => { if (out) out.textContent = offsetRange.value; };
+    offsetRange.addEventListener('input', sync);
+    sync();
+  }
+  const offsetBtn = $('toolOffset');
+  if (offsetBtn) offsetBtn.addEventListener('click', () => {
+    const objs = requireSelection();
+    if (!objs) return;
+    const distance = Number($('offsetAmount').value) || 0;
+    if (!distance) { toast('Réglez une distance non nulle', true); return; }
+    objs.slice().forEach(obj => {
+      try {
+        const bridge = BirdVector.fabricToPaper(obj);
+        if (!bridge || !bridge.item) throw new Error('Objet non convertible');
+        const item = bridge.item;
+        const result = BirdVector.offsetPathItem(item, distance);
+        if (!result) throw new Error('Décalage impossible');
+        const made = [];
+        const parts = result.className === 'CompoundPath' ? result.children : [result];
+        parts.forEach(child => {
+          const path = BirdVector.paperToFabricPath(child, {
+            fill: obj.fill, stroke: obj.stroke, strokeWidth: obj.strokeWidth
+          });
+          if (path) made.push(path);
+        });
+        if (!made.length) throw new Error('Décalage vide');
+        const group = made.length === 1 ? made[0] : new fabric.Group(made, { objectCaching: false });
+        group.set({
+          left: obj.left, top: obj.top, originX: obj.originX, originY: obj.originY,
+          angle: obj.angle, scaleX: obj.scaleX, scaleY: obj.scaleY, opacity: obj.opacity
+        });
+        replaceObject(obj, group, 'Décalage de tracé');
+      } catch (e) { toast(e.message || 'Décalage impossible', true); }
+    });
+    toast('Tracé décalé de ' + distance + ' px');
+  });
+
+  const blendRange = $('blendSteps');
+  if (blendRange) {
+    const out = $('blendStepsVal');
+    const sync = () => { if (out) out.textContent = blendRange.value; };
+    blendRange.addEventListener('input', sync);
+    sync();
+  }
+  const blendBtn = $('toolBlend');
+  if (blendBtn) blendBtn.addEventListener('click', async () => {
+    const objs = requireSelection(2);
+    if (!objs) return;
+    const steps = parseInt($('blendSteps').value, 10) || 5;
+    try {
+      const made = await BirdVector.blendObjects(objs[0], objs[1], steps);
+      const valid = (made || []).filter(Boolean);
+      if (!valid.length) { toast('Blend vide', true); return; }
+      beginTxn();
+      valid.forEach(o => canvas.add(o));
+      canvas.discardActiveObject();
+      commitUndo('Blend');
+      renderLayers(); setDirty(true);
+      toast(valid.length + ' étapes de blend créées ✓');
+    } catch (e) { toast(e.message || 'Blend impossible', true); }
+  });
+
+  bindSymbols();
+  bindFonts();
+
+  const toolsBtn = $('btnVectorTools');
+  if (toolsBtn) toolsBtn.addEventListener('click', () => {
+    els.rightSidebar.classList.remove('collapsed');
+    requestAnimationFrame(() => {
+      const target = document.querySelector('.props-section[data-section="tools"]');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+}
+
+/* ── Symboles ── */
+function renderSymbols() {
+  const list = $('symbolsList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!state.symbols.length) {
+    list.innerHTML = '<div class="empty-inline">Aucun symbole.</div>';
+    return;
+  }
+  state.symbols.forEach((sym, index) => {
+    const row = document.createElement('div');
+    row.className = 'symbol-row';
+    const name = document.createElement('span');
+    name.className = 'symbol-name';
+    name.textContent = sym.name;
+    const inst = document.createElement('span');
+    inst.className = 'font-glyphs';
+    inst.textContent = countInstances(sym.id) + ' inst.';
+    const place = document.createElement('button');
+    place.type = 'button'; place.className = 'page-tool'; place.textContent = '＋';
+    place.title = 'Placer une instance';
+    place.addEventListener('click', async () => {
+      const obj = await BirdVector.instantiateSymbol(sym, 40, 40);
+      beginTxn();
+      canvas.add(obj);
+      canvas.setActiveObject(obj);
+      commitUndo('Instance de symbole');
+      renderLayers(); renderSymbols(); setDirty(true);
+    });
+    const sync = document.createElement('button');
+    sync.type = 'button'; sync.className = 'page-tool'; sync.textContent = '↻';
+    sync.title = 'Mettre à jour les instances depuis la sélection';
+    sync.addEventListener('click', async () => {
+      const objs = selectedObjects();
+      if (!objs.length) { toast('Sélectionnez une instance', true); return; }
+      sym.json = objs[0].toObject(['birdSymbolId']);
+      const targets = canvas.getObjects().filter(o => o.birdSymbolId === sym.id);
+      if (!targets.length) { toast('Symbole enregistré (aucune instance)', false); return; }
+      for (const t of targets) {
+        const fresh = await BirdVector.instantiateSymbol(sym, t.left, t.top);
+        beginTxn();
+        const index2 = canvas.getObjects().indexOf(t);
+        canvas.remove(t);
+        canvas.insertAt(fresh, index2, false);
+        commitUndo('Symbole mis à jour');
+      }
+      renderLayers(); setDirty(true);
+      toast(targets.length + ' instance(s) mises à jour ✓');
+    });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'page-tool page-del'; del.textContent = '×';
+    del.title = 'Retirer le symbole';
+    del.addEventListener('click', () => {
+      state.symbols.splice(index, 1);
+      renderSymbols(); setDirty(true);
+    });
+    row.appendChild(name); row.appendChild(inst);
+    row.appendChild(place); row.appendChild(sync); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+function countInstances(id) {
+  return canvas.getObjects().filter(o => o.birdSymbolId === id).length;
+}
+
+function bindSymbols() {
+  const create = $('toolSymbolCreate');
+  if (create) create.addEventListener('click', () => {
+    const objs = requireSelection();
+    if (!objs) return;
+    const def = BirdVector.createSymbol(objs[0], 'Symbole ' + (state.symbols.length + 1));
+    objs[0].birdSymbolId = def.id;
+    state.symbols.push(def);
+    renderSymbols();
+    setDirty(true);
+    toast('Symbole « ' + def.name + ' » créé ✓');
+  });
+  const place = $('toolSymbolPlace');
+  if (place) place.addEventListener('click', async () => {
+    const sym = state.symbols[state.symbols.length - 1];
+    if (!sym) { toast('Créez d’abord un symbole', true); return; }
+    const obj = await BirdVector.instantiateSymbol(sym, 40, 40);
+    beginTxn();
+    canvas.add(obj);
+    canvas.setActiveObject(obj);
+    commitUndo('Instance de symbole');
+    renderLayers(); renderSymbols(); setDirty(true);
+  });
+  renderSymbols();
+}
+
+/* ── Polices ── */
+function renderFonts() {
+  const list = $('fontsList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!window.BirdVector) return;
+  const registered = BirdVector.listFonts();
+  // On signale aussi les familles utilisées dans le document mais absentes.
+  const used = new Set();
+  canvas.getObjects().forEach(o => {
+    if (o.type === 'i-text' || o.type === 'text' || o.type === 'textbox') {
+      const fam = String(o.fontFamily || '').split(',')[0].replace(/['"]/g, '').trim();
+      if (fam && !BirdVector.hasFont(o.fontFamily)) used.add(fam);
+    }
+  });
+  if (!registered.length && !used.size) {
+    list.innerHTML = '<div class="empty-inline">Aucune police chargée.</div>';
+    return;
+  }
+  registered.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'font-row';
+    const name = document.createElement('span');
+    name.className = 'font-name';
+    name.textContent = f.name;
+    const glyphs = document.createElement('span');
+    glyphs.className = 'font-glyphs';
+    glyphs.textContent = f.glyphs + ' glyphes';
+    row.appendChild(name); row.appendChild(glyphs);
+    list.appendChild(row);
+  });
+  used.forEach(fam => {
+    const row = document.createElement('div');
+    row.className = 'font-row is-missing';
+    const name = document.createElement('span');
+    name.className = 'font-name';
+    name.textContent = fam + ' — manquante';
+    const glyphs = document.createElement('span');
+    glyphs.className = 'font-glyphs';
+    glyphs.textContent = 'à charger';
+    row.appendChild(name); row.appendChild(glyphs);
+    list.appendChild(row);
+  });
+}
+
+function bindFonts() {
+  const add = $('fontsAdd');
+  const file = $('fontsFile');
+  if (add && file) {
+    add.addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+      try {
+        const parsed = await BirdVector.loadFontFile(f);
+        renderFonts();
+        toast('Police « ' + parsed.name + ' » chargée ✓');
+      } catch (e) {
+        toast('Police illisible : ' + (e.message || ''), true);
+      }
+    });
+  }
+  if (window.BirdVector) {
+    BirdVector.restoreFonts().then(n => { if (n) renderFonts(); });
+  }
+  renderFonts();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -2856,15 +3276,25 @@ function syncExportUI() {
   document.querySelectorAll('#exportFormats .export-format').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.format === state.exportFormat);
   });
-  const isVector = state.exportFormat === 'svg' || state.exportFormat === 'pdf';
+  const isVector = state.exportFormat === 'svg' || state.exportFormat === 'pdf' || state.exportFormat === 'pdfx';
+  const isPrint = state.exportFormat === 'pdfx';
   $('exportScaleField').hidden = isVector;
   $('exportBgField').hidden = false;
+  // Les réglages d'imprimerie n'apparaissent que pour le PDF/X.
+  const printBox = $('exportPrint');
+  if (printBox) printBox.hidden = !isPrint;
+  if ($('exportScopePages')) $('exportScopePages').disabled = state.pages.length < 2 || isPrint;
+  if (isPrint && state.exportScope === 'pages') {
+    state.exportScope = 'document';
+    $('exportScope').value = 'document';
+  }
   const bg = $('exportBackground');
   bg.querySelector('option[value="transparent"]').disabled = state.exportFormat === 'jpg';
   if (state.exportFormat === 'jpg') bg.value = 'white';
   const notes = {
     svg: 'SVG conserve les objets, le texte et les dégradés. Idéal pour le web et l’édition.',
-    pdf: 'PDF vectoriel compatible Illustrator. Les polices non standard sont remplacées par Helvetica, Times ou Courier.',
+    pdf: 'PDF vectoriel écran, compatible Illustrator. Les polices non standard sont remplacées par Helvetica, Times ou Courier.',
+    pdfx: 'PDF/X-1a:2001 : CMJN uniquement, dégradés en shadings, texte vectorisé, profil ICC déclaré. C’est le fichier à envoyer à l’imprimeur.',
     png: 'PNG avec transparence. Choisissez un fond si vous voulez un aplat.',
     jpg: 'JPG sans transparence : le fond est composité en blanc.',
     webp: 'WEBP : meilleur compromis poids/qualité pour le web.'
@@ -2875,6 +3305,22 @@ function syncExportUI() {
   $('exportSize').textContent = state.exportScope === 'pages'
     ? state.pages.length + ' pages PDF'
     : currentExportSize();
+}
+
+function syncIccUI() {
+  const name = $('exportIccName');
+  const hint = $('exportIccHint');
+  if (!name) return;
+  if (state.iccProfile) {
+    name.textContent = state.iccProfile.name;
+    const ko = state.iccProfile.components !== 4;
+    hint.textContent = ko
+      ? '⚠ Profil non CMJN : le PDF/X ne sera pas conforme. Choisissez un profil CMJN.'
+      : 'Profil embarqué comme /DestOutputProfile du PDF.';
+  } else {
+    name.textContent = 'Bird CMYK (générique)';
+    hint.textContent = 'Chargez le profil ICC de votre imprimeur pour un PDF/X de production.';
+  }
 }
 
 function bindExportModal() {
@@ -2912,6 +3358,50 @@ function bindExportModal() {
   });
   $('exportScale').addEventListener('change', syncExportUI);
   $('exportBackground').addEventListener('change', syncExportUI);
+
+  // ── Réglages d'imprimerie ──
+  if ($('exportBleed')) $('exportBleed').addEventListener('change', () => {
+    state.pdfxBleed = Number($('exportBleed').value) || 0;
+  });
+  if ($('exportGcr')) $('exportGcr').addEventListener('change', () => {
+    state.cmykGcr = Number($('exportGcr').value);
+    if (isNaN(state.cmykGcr)) state.cmykGcr = 0.6;
+  });
+  if ($('exportInk')) $('exportInk').addEventListener('change', () => {
+    state.cmykInkLimit = Number($('exportInk').value) || 3;
+  });
+  if ($('exportIccLoad') && $('exportIccFile')) {
+    $('exportIccLoad').addEventListener('click', () => $('exportIccFile').click());
+    $('exportIccFile').addEventListener('change', async () => {
+      const file = $('exportIccFile').files && $('exportIccFile').files[0];
+      $('exportIccFile').value = '';
+      if (!file) return;
+      try {
+        const buf = new Uint8Array(await file.arrayBuffer());
+        const profile = BirdColor.readProfile(buf);
+        state.iccProfile = {
+          bytes: buf,
+          name: file.name.replace(/\.(icc|icm)$/i, '') + ' · ' + profile.name,
+          components: profile.components
+        };
+        if (profile.components !== 4) {
+          toast('Ce profil n’est pas CMJN (' + profile.colorspace + ') : intrants non conformes', true);
+        } else {
+          toast('Profil ICC chargé ✓');
+        }
+        syncIccUI();
+      } catch (e) {
+        toast('Profil illisible : ' + (e.message || ''), true);
+      }
+    });
+  }
+  if ($('exportIccReset')) $('exportIccReset').addEventListener('click', () => {
+    state.iccProfile = null;
+    syncIccUI();
+    toast('Profil ICC générique rétabli');
+  });
+  syncIccUI();
+
   $('exportClose').addEventListener('click', close);
   $('exportCancel').addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
@@ -2923,7 +3413,9 @@ function bindExportModal() {
       format: fmt,
       scope: state.exportScope,
       scale: Number($('exportScale').value) || 1,
-      background: $('exportBackground').value
+      background: $('exportBackground').value,
+      bleed: state.pdfxBleed,
+      outlineText: $('exportOutlineText') ? $('exportOutlineText').value === '1' : true
     });
   });
 
@@ -4510,6 +5002,9 @@ async function runExport(opts) {
     return await exportPagesPDF(opts);
   }
 
+  // PDF d'imprimerie : chemin entièrement séparé (CMJN, shadings, ICC).
+  if (format === 'pdfx') return await exportPDFX(opts);
+
   const bounds = exportBounds(scope);
   if (!bounds) { toast('Sélectionnez au moins un objet', true); return null; }
 
@@ -4590,6 +5085,168 @@ async function runExport(opts) {
     refreshActiveSelection();
     canvas.requestRenderAll();
   }
+}
+
+/* ════════════════════════════════════════════════════════════
+   EXPORT PDF/X-1a (IMPRIMERIE)
+   ────────────────────────────────────────────────────────────
+   Chemin séparé de l'export PDF « écran » : ici on écrit le PDF
+   nous-mêmes (js/pdfx.js) pour avoir du CMJN, de vrais shadings,
+   un OutputIntent ICC et du texte vectorisé.
+════════════════════════════════════════════════════════════ */
+async function exportPDFX(opts) {
+  opts = opts || {};
+  if (!window.BirdPDFX) { toast('Moteur PDF/X indisponible', true); return null; }
+  if (!window.paper) { toast('Moteur vectoriel indisponible', true); return null; }
+
+  const page = activePage();
+  const width = Math.max(1, Math.round(state.artboardW));
+  const height = Math.max(1, Math.round(state.artboardH));
+  const bleedPx = Math.max(0, Number(opts.bleed) || 0);
+  const warnings = [];
+
+  // ── 1. Texte → courbes (aucune police à embarquer) ──
+  let entries = [];
+  if (opts.outlineText !== false) {
+    const prepared = BirdVector.vectorizeForExport(canvas);
+    prepared.warnings.forEach(w => warnings.push('Texte non vectorisé : ' + w));
+    entries = prepared.entries;
+  } else {
+    canvas.getObjects().forEach(o => entries.push({ source: o, paths: null }));
+  }
+
+  // ── 2. Fabric → Paper → entrées PDF, dans l'ordre d'empilement ──
+  const items = [];
+  const images = [];
+  const flipY = [1, 0, 0, -1, 0, height];
+
+  for (const entry of entries) {
+    const objects = entry.paths && entry.paths.length ? entry.paths : [entry.source];
+    for (const obj of objects) {
+      if (!obj || obj.visible === false) continue;
+
+      if (obj.type === 'image') {
+        const img = await rasterToPdfImage(obj, flipY);
+        if (img) images.push(img);
+        else warnings.push('Image non convertible (format source)');
+        continue;
+      }
+      if (obj.type === 'group' && containsText(obj)) {
+        warnings.push('Un groupe contient du texte : il restera du texte, pas des courbes');
+      }
+      if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') {
+        warnings.push('Texte conservé tel quel (option « vectoriser » désactivée)');
+        continue;
+      }
+
+      try {
+        const bridge = BirdVector.fabricToPaper(obj);
+        if (!bridge || !bridge.item) continue;
+        const collected = BirdPDFX.itemsFromPaper([bridge.item]);
+        // Paper.js réimporte un <radialGradient> comme un dégradé linéaire.
+        // On rétablit le type réel depuis l'objet Fabric d'origine.
+        const fabricFill = obj.fill;
+        const isRadial = fabricFill && fabricFill.type === 'radial';
+        collected.forEach(item => {
+          // Le repère Paper.js est celui du canvas : on applique la bascule Y.
+          item.paths.forEach(p => { p.matrix = mul3(flipY, p.matrix); });
+          item.matrix = mul3(flipY, item.matrix);
+          if (isRadial && item.fill && item.fill.gradient) {
+            item.fill.gradient.gradientType = 'radial';
+          }
+          items.push(item);
+        });
+      } catch (e) {
+        console.warn('[Bird PDF/X] objet ignoré', e);
+        warnings.push('Objet ignoré (' + obj.type + ')');
+      }
+    }
+  }
+
+  // Le projet Paper.js privé a servi : on le vide pour l'export suivant.
+  if (window.BirdVector && BirdVector.resetPaperScope) {
+    try { BirdVector.resetPaperScope(); } catch (e) {}
+  }
+
+  // ── 3. Écriture ──
+  toast('Composition du PDF/X-1a…');
+  const icc = state.iccProfile && state.iccProfile.bytes
+    ? state.iccProfile
+    : { bytes: BirdColor.buildProfile({ name: 'Bird CMYK', colorspace: 'CMYK' }), name: 'Bird CMYK (générique)' };
+  if (!state.iccProfile) {
+    warnings.push('Profil ICC générique : chargez le profil de votre imprimeur pour un PDF/X de production');
+  }
+
+  let bytes;
+  try {
+    bytes = await BirdPDFX.build({
+      width: width,
+      height: height,
+      bleed: bleedPx,
+      background: opts.background === 'transparent' ? null : (state.artboardColor || '#ffffff'),
+      title: (page ? page.name + ' — ' : '') + 'Bird',
+      author: 'Bird',
+      items: items,
+      images: images,
+      icc: icc,
+      cmyk: { gcr: state.cmykGcr, inkLimit: state.cmykInkLimit }
+    });
+  } catch (e) {
+    console.error('[Bird PDF/X]', e);
+    toast('PDF/X impossible : ' + (e.message || 'erreur'), true);
+    return null;
+  }
+
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  if (warnings.length) {
+    console.info('[Bird PDF/X] avertissements', warnings);
+    toast('PDF/X-1a prêt · ' + warnings.length + ' avertissement(s) en console');
+  } else {
+    toast('PDF/X-1a exporté ✓');
+  }
+  if (opts.returnBlob) return { blob, bytes, warnings };
+  downloadBlob(blob, (opts.filename || ('bird-' + timestamp())) + '-x1a.pdf', 'PDF/X-1a exporté ✓');
+  return { blob, bytes, warnings };
+}
+
+function mul3(a, b) {
+  return [
+    a[0] * b[0] + a[2] * b[1],
+    a[1] * b[0] + a[3] * b[1],
+    a[0] * b[2] + a[2] * b[3],
+    a[1] * b[2] + a[3] * b[3],
+    a[0] * b[4] + a[2] * b[5] + a[4],
+    a[1] * b[4] + a[3] * b[5] + a[5]
+  ];
+}
+
+function containsText(obj) {
+  if (!obj) return false;
+  if (obj.type === 'i-text' || obj.type === 'text' || obj.type === 'textbox') return true;
+  if (obj._objects) return obj._objects.some(containsText);
+  return false;
+}
+
+/* Extrait les pixels d'un objet image et calcule sa matrice PDF. */
+async function rasterToPdfImage(obj, flipY) {
+  const el = obj._element;
+  if (!el) return null;
+  const w0 = Math.max(1, Math.round(el.naturalWidth || el.videoWidth || el.width || 1));
+  const h0 = Math.max(1, Math.round(el.naturalHeight || el.videoHeight || el.height || 1));
+  if (w0 * h0 > 40e6) throw new Error('Image trop grande pour un PDF/X sans compression JPEG');
+
+  const c = document.createElement('canvas');
+  c.width = w0; c.height = h0;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(el, 0, 0, w0, h0);
+  let data;
+  try { data = ctx.getImageData(0, 0, w0, h0).data; }
+  catch (e) { return null; }   // canvas « tainted »
+
+  // Unité (0,0)-(1,1) → boîte locale (v vers le bas) → canvas → PDF.
+  const local = [w0, 0, 0, -h0, -w0 / 2, h0 / 2];
+  const matrix = mul3(flipY, mul3(obj.calcTransformMatrix(), local));
+  return { width: w0, height: h0, data: data, matrix: matrix, opacity: obj.opacity };
 }
 
 /* ── PDF de tous les plans ──
@@ -4790,6 +5447,21 @@ function bindKeyboard() {
     if (cmd && (e.key === '2' || e.code === 'Digit2')) { e.preventDefault(); toggleLockSelection(); return; }
     if (cmd && (e.key === '3' || e.code === 'Digit3')) { e.preventDefault(); toggleVisibleSelection(); return; }
     if (cmd && (e.key === '0' || e.code === 'Digit0')) { e.preventDefault(); fitView(); return; }
+    // Raccourcis « Adobe » classiques, valables aussi en Cmd sur macOS.
+    if (cmd && (e.key === '=' || e.key === '+' || e.code === 'Equal')) {
+      e.preventDefault(); setZoom(state.zoom * 1.25); return;
+    }
+    if (cmd && (e.key === '-' || e.code === 'Minus')) {
+      e.preventDefault(); setZoom(state.zoom / 1.25); return;
+    }
+    if (cmd && (e.key === '1' || e.code === 'Digit1') && !e.shiftKey) {
+      e.preventDefault(); setZoom(1); return;
+    }
+    if (cmd && e.key === ',') {
+      e.preventDefault();
+      if ($('btnSettings')) $('btnSettings').click();
+      return;
+    }
     if (cmd && (e.key === 'r' || e.key === 'R')) {
       e.preventDefault();
       setRulers(!state.showRulers);
@@ -5329,6 +6001,9 @@ function resizeCanvas() {
   canvas.setDimensions({ width: w, height: h }, { cssOnly: false });
   canvas.calcOffset();
   canvas.requestRenderAll();
+  // Le widget de zoom se cale sur la largeur réelle du panneau de droite :
+  // rétractée elle le ramène, ouverte elle le pousse.
+  publishSidebarWidth();
   updateRulers();
   renderGuides(true);
 }
@@ -5338,7 +6013,7 @@ window.addEventListener('resize', resizeCanvas);
    API PUBLIQUE (intégration Astro / Rust / automatisation)
 ════════════════════════════════════════════════════════════ */
 window.Bird = {
-  version: '1.7.0',
+  version: '1.9.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

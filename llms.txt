@@ -23,6 +23,9 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Import PDF multi-pages : première page, page choisie, ou un plan de travail par page
 - Plans de travail multiples : panneau, sélecteur flottant, format indépendant, historique par plan
 - Export SVG, PDF vectoriel, PDF multi-plans, PNG, JPG, WEBP (document ou sélection)
+- Export PDF/X-1a pour l'imprimeur : CMJN, dégradés en shadings, texte vectorisé, profil ICC
+- Outils Illustrator : contour de trait, décalage de tracé, simplification, symboles, blend
+- Texte → courbes (opentype.js), polices chargeables (.ttf/.otf)
 - Projet .plume (JSON) versionné, sauvegarde automatique localStorage/IndexedDB
 - Historique annuler / rétablir
 
@@ -56,6 +59,11 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Bird.io.pdfPageCount(buffer) : nombre de pages et formats d'un PDF
 - Bird.export({ format:'pdf', scope:'pages' }) : un PDF, une page par plan de travail
 - Bird.pages.list() / count() / go(n) / add(name) / duplicate() / remove(n) / rename(n, nom) / move(n, delta)
+- Bird.export({ format:'pdfx', scope:'document', returnBlob:true }) : PDF/X-1a CMJN + ICC
+- BirdVector.outlineStroke(obj) / offsetPathItem(item, d) / simplifyPath(obj, tol)
+- BirdVector.vectorizeTextObject(canvas, obj) / loadFontFile(file)
+- BirdVector.blendObjects(a, b, n) / createSymbol(obj, name) / instantiateSymbol(def, x, y)
+- BirdPDFX.build({ width, height, bleed, background, items, images, icc, cmyk })
 - Bird.view.rulers(bool), Bird.view.grid(bool), Bird.view.snap(bool)
 - Bird.widgets.detach(name) / dock(name) / dockAll() / reset()
 - BirdPlugins.register(manifest), BirdPlugins.list(), BirdPlugins.toggle(id)
@@ -73,3 +81,4 @@ croix, grille, écailles. Sortie texture (un fabric.Pattern) ou vectorielle (for
 - / : version web autonome (aucune compilation)
 - /astro/ : version Astro (SEO, PWA, routes API)
 - /rust/ : moteur Rust (CLI, serveur local, conversion de projets)
+- /desktop/ : coquille Tauri 2 → applis macOS, Windows et Linux (à compiler par OS)

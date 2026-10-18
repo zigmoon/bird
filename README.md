@@ -1,309 +1,259 @@
-# BIRD — Éditeur vectoriel
+# Bird — Vector Editor
 
-<img src="icons/bird-logo.svg" alt="Bird" width="180">
+<p align="center">
+  <img src="icons/bird-logo.svg" width="240" alt="Bird — vector editor">
+</p>
 
-**Le studio de dessin vectoriel local-first du navigateur.**
-Bézier, calques, règles et repères, Pathfinder, texte éditable, plug-ins, panneaux détachables, import PDF/AI/EPS/SVG et export SVG **ou PDF vectoriel**. Aucune installation, aucun compte : vos documents restent sur votre machine.
+<p align="center">
+  <b>A local-first vector studio that runs entirely in your browser.</b><br>
+  Bézier pen, layers, multiple artboards, plug-ins, detachable panels, PDF/AI/EPS import,<br>
+  and a real press-ready <b>PDF/X-1a</b> export — CMYK, ICC output intent, outlined text.
+</p>
 
-Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox, Safari), ou utilisez la version Astro (`astro/`) / le moteur Rust (`rust/`).
-
----
-
-## Sommaire
-
-- [Nouveautés v1.6](#nouveautés-v16)
-- [Ce qui fait de Bird un « Illustrator killer »](#ce-qui-fait-de-bird-un--illustrator-killer-)
-- [Ergonomie : la barre haute](#ergonomie--la-barre-haute)
-- [Widgets détachables](#widgets-détachables)
-- [Plug-ins](#plug-ins)
-- [Création assistée par IA](#création-assistée-par-ia)
-- [Import](#import) · [Export](#export)
-- [Raccourcis](#raccourcis)
-- [Architecture](#architecture)
-- [Version Astro](#version-astro) · [Moteur Rust](#moteur-rust)
-- [Développement](#développement)
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#pdfx-1a-export">PDF/X-1a</a> ·
+  <a href="#artboards">Artboards</a> ·
+  <a href="#plug-ins">Plug-ins</a> ·
+  <a href="#desktop-builds">Desktop builds</a>
+</p>
 
 ---
 
-## Nouveautés v1.7
+## Why Bird
 
-| Domaine | Ce qui change |
-|---|---|
-| **Plans de travail** | Un document contient désormais **plusieurs plans** (comme les artboards d’Illustrator) : panneau dédié, sélecteur flottant sur le plan de travail, `Ctrl+Page↑` / `Ctrl+Page↓`, format indépendant par plan, historique **par plan**. |
-| **Import PDF multi-pages** | Un PDF de N pages propose trois choix : première page, page précise, ou **toutes les pages → un plan par page** au format exact de chaque page, contenu à 1:1. |
-| **Export PDF multi-plans** | `Tous les plans de travail (PDF)` : un seul PDF, une page par plan, chacune à son format. |
-| **Icônes** | L’aperçu du plan de travail vide utilise le logo en **gris clair** (marque discrète, pas un aplat noir). |
-| **Panneau rétracté** | Le rail d’icônes passe de 13 à 7 entrées utiles ; les `•••` restent visibles pour rouvrir le panneau. |
+Most browser editors stop at "export SVG". That is enough for the web and useless
+for a printer. Bird was built for a small print shop, so the last step of the
+pipeline is the one that got the most attention:
 
-### v1.6
-
-| Domaine | Ce qui change |
-|---|---|
-| **Identité** | Nouveau logo Bird (vol de cinq oiseaux) : écran de démarrage, barre haute, aperçu du plan de travail vide, favicon et icônes PWA 192/512. |
-| **Barre haute** | Grammaire SuperPrint : fichiers à gauche, outils **centrés sur la fenêtre**, zoom + `EXPORT` + réglages à droite. |
-| **Bascules de vue** | Règles, grille et magnétisme deviennent des boutons à état (`aria-pressed`) synchronisés avec le panneau Document et le clavier. |
-| **Règles** | Le plan de travail commence **après** les règles : plus de zone de dessin cachée sous la graduation. Bulle de valeur pendant le glissement, `Échap` annule, dépôt accepté sur toute la scène, double-clic sur le coin efface les repères. |
-| **Widgets** | Chaque panneau de droite se détache en carte flottante : déplaçable, repliable, refermable, position mémorisée. |
-| **Plug-ins** | Registre persistant, installation depuis un fichier `.plugin.js`, tiroir de réglages généré depuis le manifeste, icône dans la barre d’outils. |
-| **Plug-in livré** | **Motif vectoriel** : 9 motifs sans raccord, sortie texture (1 objet) ou vectorielle (formes réelles). |
-| **IA** | **DeepSeek** ajouté (API directe + modèles via OpenRouter), sélecteur de fournisseur, clés séparées par fournisseur. |
-| **API** | `Bird.view.*`, `Bird.widgets.*`, `BirdPlugins.*` — contrat stable pour l’intégration. |
+- **No server, no account.** Your files never leave the machine.
+- **Real vector work.** Bézier editing, boolean operations, path tools, and a
+  text engine that can turn type into curves.
+- **A print pipeline that does not lie.** Where the PDF standard cannot do
+  something (transparency in PDF/X-1a), Bird says so instead of pretending.
 
 ---
 
-## Ce qui fait de Bird un « Illustrator killer »
+## Quick start
 
-### Dessin
-- **Plume (Bézier)** : clic = ancre, glisser = poignées, ré-édition complète (ajout/suppression de points, segments courbes).
-- **Crayon** et **pinceau vectoriel** : Ligne, Encre, Marker, Spray, Néon ; taille, lissage, opacité, pression du stylet.
-- **Formes** : rectangle (rayon modifiable), ellipse, ligne, étoile et polygone paramétrables (nombre de points, rayon interne).
-- **Texte** : police, taille, gras, italique, souligné, barré, alignement.
-- **Pathfinder** : union, soustraction, intersection, exclusion, sans rasterisation (Paper.js).
-- **Conversion forme → chemin** et **Pathfinder** conservent l’édition vectorielle.
-- **Images et vidéos** : import PNG/JPG/WebP/GIF/BMP/AVIF, vignette de vidéo WebM/MP4.
-
-### Organisation et précision
-- **Panneau Calques** : liste des objets, sélection, renommage, visibilité, verrouillage, ordre.
-- **Règles H/V** avec graduations dynamiques et **repères** (glisser depuis une règle, déplacer, double-clic pour supprimer).
-- **Grille**, **magnétisme** (repères, grille, bords/centres des objets et du plan de travail).
-- **Zoom infini** 5 % → 6400 %, molette vers le curseur, zoom sur sélection (`Maj+2`).
-- **Alignements**, répartition « Tidy », alignement sur le plan de travail, miroir.
-- **Opacité et modes de fusion** (produit, écran, incrustation, différence, teinte, luminosité…).
-- **Contours** : épaisseur, pointillés (presets + motif libre), extrémités, jonctions.
-- **Pipette** (`I`) : prélève une couleur et l’applique à la sélection.
-
----
-
-## Ergonomie : la barre haute
-
-La barre suit une règle simple : **une zone par intention**, et les outils toujours au même endroit, centrés sur la fenêtre — pas sur l’espace restant. Les boutons font strictement 32 × 32 px, pour que la rangée ne « respire » jamais au gré des libellés.
-
-| Zone | Contenu | Règle |
-|---|---|---|
-| **Gauche** | logo (retour à la vue ajustée), nouveau, ouvrir, enregistrer | actions de fichier |
-| **Centre** (absolu, centré) | annuler/rétablir, grouper/dégrouper, règles, grille, magnétisme, plug-ins actifs, IA | outils, jamais déplacés |
-| **Droite** | zoom −/lecture/+, ajuster, zoom sélection, `EXPORT ▾`, préférences | sortie et réglages |
-
-Les trois bascules de vue sont des boutons à état :
-
-- **Règles** `Ctrl+R` — affiche/masque les graduations ; le plan de travail se décale de 18 px en conséquence.
-- **Grille** `Ctrl+'` — grille de repérage dans le plan de travail (pas réglable dans *Document*).
-- **Magnétisme** `Ctrl+;` — accroche aux repères, à la grille et aux bords/centres des objets.
-
-Ces trois boutons, les interrupteurs du panneau *Document* et les raccourcis clavier passent tous par la même fonction : l’état affiché ne peut donc jamais diverger de l’état réel.
-
----
-
-## Widgets détachables
-
-Le panneau de droite reprend la grammaire de SuperPrint : en-tête `•••`, rail d’icônes quand il est rétracté, sections titrées.
-
-Chaque section possède un bouton **détacher**. Une fois détachée :
-
-- la section devient une **carte flottante** au-dessus du plan de travail ;
-- elle se déplace en glissant son en-tête, se replie, se referme (retour au panneau) ;
-- sa position est **mémorisée** (`localStorage`, clé `bird_widgets_v1`) ;
-- elle **continue de fonctionner à l’identique** : c’est le même nœud DOM qui est déplacé, pas une copie. Aucun écouteur n’est perdu.
-
-La section *Widgets* liste tous les panneaux avec leur état (*Ancré* / *Détaché*) ; `•••` de l’en-tête referme le panneau, le bouton ↧ de l’en-tête rattache tout d’un coup.
-
-```js
-Bird.widgets.detach('layers');   // détache le panneau Calques
-Bird.widgets.dock('layers');     // le rattache
-Bird.widgets.dockAll();          // tout rattacher
-Bird.widgets.reset();            // positions et états d'origine
-Bird.widgets.list();             // ['appearance', 'shape', …]
+```bash
+npx serve .        # http://localhost:3000
 ```
+
+No build step for the web app. The Astro version (`astro/`) and the native shell
+(`desktop/`) wrap the *same* engine — one source of truth, not three.
+
+---
+
+## Features
+
+### Drawing
+- **Pen (Bézier)** — click for an anchor, drag for handles, re-edit any path
+  (add/remove points, curve segments).
+- **Pencil** and **vector brushes** — Line, Ink, Marker, Spray, Neon; size,
+  smoothing, opacity, stylus pressure.
+- **Shapes** — rectangle (editable corner radius), ellipse, line, star, polygon.
+- **Text** — family, size, weight, style, alignment, and **convert to curves**.
+- **Pathfinder** — union, subtract, intersect, exclude, without rasterisation.
+- **Images and video** — PNG/JPG/WebP/GIF/BMP/AVIF, first frame of WebM/MP4.
+
+### Organisation and precision
+- **Layers panel** — list, select, rename, hide, lock, reorder.
+- **Rulers, guides, grid, snapping** — drag a guide off any ruler, `Esc` cancels,
+  double-click the ruler corner clears them all.
+- **Artboards** — see below.
+- **Zoom** 5 % → 6400 %, wheel-to-cursor, zoom to selection.
+- **Align / distribute / mirror**, opacity, blend modes, dashes, caps, joins.
+- **Eyedropper**.
+
+### Illustrator-style vector tools
+| Tool | What it does |
+|---|---|
+| **Outline stroke** | Turns a stroke into a closed filled shape (offset ring, no raster) |
+| **Offset path** | Offsets ±px with rounded joins, self-intersections resolved |
+| **Simplify** | Reduces anchor count while keeping the shape |
+| **Text → curves** | Real glyph outlines via `opentype.js`, so no font dependency |
+| **Symbols** | Definition + linked instances, with propagation |
+| **Blend** | Interpolates shape, transform and colour between two objects |
+
+---
+
+## PDF/X-1a export
+
+This is a **separate writer**, not a flag on the screen-PDF path. `jsPDF` and
+`svg2pdf` cannot produce press files: they emit RGB, fall back to Helvetica, and
+drop gradients to their first colour. `js/pdfx.js` writes the PDF itself.
+
+What comes out:
+
+| Requirement | Implementation |
+|---|---|
+| PDF 1.3, single page | own object store + xref table |
+| Colour | `/DeviceCMYK` only — no RGB operator ever appears |
+| Gradients | **shadings** (type 2 axial, type 3 radial) with per-channel CMYK functions |
+| Text | converted to outlines by default (no font embedding needed) |
+| Output intent | `/OutputIntent /S /GTS_PDFX` + embedded `/DestOutputProfile` |
+| Metadata | XMP declaring `PDF/X-1a:2001` |
+| Boxes | `/MediaBox`, `/CropBox`, `/BleedBox`, `/TrimBox`, `/ArtBox` |
+| Trapping flag | `/Trapped /False` |
+
+Export panel options: bleed (up to 6 mm), black generation (UCR/GCR), total ink
+limit (240/300/330 %), and text handling (outline or keep).
+
+### ICC profiles
+
+Bird ships a **synthetically generated, structurally valid CMYK profile**
+("Bird CMYK"). It makes the container conform, but it is *not* a measured
+FOGRA39 or GRACoL. Load your printer's `.icc`/`.icm` in the export panel and it
+is embedded verbatim as the `/DestOutputProfile`.
+
+> **Honest limits.** PDF/X-1a:2001 forbids transparency, so object opacity is
+> blended into the CMYK components (exact over an opaque flat, approximate over a
+> gradient). Raster images are converted to CMYK and Flate-compressed. Complex
+> nested groups are flattened.
+
+Validation performed during development: the produced file re-opens in `pdf.js`
+with the correct page box, renders a real axial ramp (measured 248 → 154 → 56
+across a black-to-white gradient), and re-imports into Bird as editable paths.
+
+---
+
+## Artboards
+
+A document holds several artboards, like Illustrator. One canvas: the active
+artboard lives in it, the others are serialised.
+
+- **Artboards panel** — numbered list, rename (double-click), dimensions, object
+  count, reorder, delete with confirmation.
+- **Floating switcher** at the bottom of the canvas once there are two or more.
+- `Ctrl/Cmd + PageUp / PageDown`.
+- **Per-artboard undo/redo**: switching stores the history stacks, so undoing on
+  one artboard never touches another — and each snapshot holds one artboard, not
+  the whole document (this is what keeps memory sane with images).
+- Saved in the `.plume` project as `pages[]` + `activePage`; older single-page
+  projects open as a one-artboard document.
+
+---
+
+## PDF import
+
+| Format | Method | Result |
+|---|---|---|
+| `.svg` / `.svgz` | sanitising parser + Fabric | editable vector objects |
+| `.pdf` | `pdf.js` (paths, clips, colours, text, images) | editable vector group |
+| `.pdf`, many pages | page picker: first / specific / **all → one artboard per page** | exact page sizes, content at 1:1 |
+| `.ai` (modern) | signature detection → PDF import | editable vector |
+| `.ai` / `.eps` PostScript | Illustrator level-2 interpreter | editable Fabric paths |
+| `.png .jpg .webp .gif .bmp .avif` | bitmap | editable image |
+| `.webm .mp4` | first frame | thumbnail |
+| `.plume` / `.bird` / `.json` | `bird-vector-project` schema v2/v3 | full document |
+
+The system clipboard works too: paste SVG or an image straight onto the canvas.
 
 ---
 
 ## Plug-ins
 
-Un plug-in est un fichier **`.plugin.js`** autonome :
+A plug-in is a standalone `.plugin.js` file:
 
 ```js
 BirdPlugins.register({
-  id: 'mon-plugin',
-  name: 'Mon plug-in',
+  id: 'my-plugin',
+  name: 'My plug-in',
   version: '1.0.0',
-  description: 'Ce qu’il fait, en une phrase.',
-  builtin: false,
-  actifParDefaut: false,
-
   ui: {
-    preview: true,                       // canvas d'aperçu dans le tiroir
+    preview: true,
     fields: [
-      { key: 'motif', label: 'Motif', type: 'select', value: 'a',
+      { key: 'mode', label: 'Mode', type: 'select', value: 'a',
         options: [{ value: 'a', label: 'Option A' }] },
-      { key: 'pas', label: 'Pas', type: 'range', min: 4, max: 200, value: 40, unit: ' px', row: 1 },
-      { key: 'couleur', label: 'Couleur', type: 'color', value: '#1a1a1a' },
-      { key: 'fond', label: 'Fond opaque', type: 'checkbox', value: false }
+      { key: 'step', label: 'Step', type: 'range', min: 4, max: 200, value: 40, unit: ' px' }
     ]
   },
-
-  preview(api, values, canvas, ctx) { /* dessin de l'aperçu */ },
-
-  run(api, values) {                     // appelé sur APPLIQUER
-    api.begin();                         // une seule entrée d'historique
-    api.add(new api.fabric.Rect({ /* … */ }), 'Mon objet');
-    api.toast('Fait');
+  preview(api, values, canvas, ctx) { /* live preview */ },
+  run(api, values) {                      // APPLY
+    api.begin();                          // single history entry
+    api.add(new api.fabric.Rect({ /* … */ }), 'My object');
   }
 });
 ```
 
-### API fournie
-
-| Membre | Rôle |
+| API | Role |
 |---|---|
-| `api.fabric` | `window.fabric` (5.1) |
-| `api.canvas` | le canvas Fabric actif |
-| `api.document` | `{ width, height, background, objects }` |
-| `api.selection()` / `api.selectionBounds()` | objets sélectionnés / leur boîte englobante |
-| `api.add(object, label)` | ajoute un objet, avec **une** entrée d’historique |
-| `api.replaceSelection(objects, label)` | remplace la sélection |
-| `api.begin()` / `api.commit(label)` | transaction manuelle |
-| `api.toast(msg, isError)` | notification |
-| `api.settings.get/set` | réglages persistants du plug-in |
-| `api.svgToGroup(svgText)` | SVG → groupe Fabric (promesse) |
-| `api.pattern(source, repeat, transform)` | `fabric.Pattern` prêt à remplir une forme |
+| `api.fabric` | Fabric 5.1 |
+| `api.canvas` / `api.document` | active canvas / document info |
+| `api.selection()` / `api.selectionBounds()` | selected objects and their bounds |
+| `api.add()` / `api.replaceSelection()` | add or replace, with one undo entry |
+| `api.begin()` / `api.commit()` | manual transaction |
+| `api.settings.get/set` | persisted per plug-in |
+| `api.svgToGroup()` / `api.pattern()` | SVG → Fabric group, `fabric.Pattern` |
 
-### Types de champs
+Field types: `select`, `range` (with `<output>`), `number`, `color`, `checkbox`,
+`text`, `textarea`, `group`. Install from file, toggle on, the icon appears in
+the centred toolbar.
 
-`select`, `range` (avec `<output>` + unité), `number`, `color`, `checkbox`, `text`, `textarea`, `group`.
-Deux champs consécutifs portant `row` vont côte à côte. `ui.preview: false` masque l’aperçu.
+**Bundled: Vector pattern** — 9 seamless patterns (stripes, checker, dots,
+waves, chevrons, triangles, crosses, grid, scales). Each tile has a whole-number
+period, so the seam is mathematically exact. Output is either a single
+`fabric.Pattern` (light) or real stacked shapes (exportable to PDF/EPS).
 
-### Cycle de vie
-
-1. **Installation** — bouton *Installer…* : le fichier est lu, son `id` extrait, le manifeste enregistré (`localStorage`, `bird_plugins_v1`).
-2. **Activation** — interrupteur du panneau *Plug-ins* : le script est évalué, une **icône apparaît dans la barre d’outils centrée**.
-3. **Utilisation** — clic sur l’icône ou *Utiliser* : le tiroir de réglages s’ouvre, l’aperçu se met à jour à chaque frappe, `APPLIQUER` écrit dans le document.
-4. **Retrait** — bouton *Retirer* sur les plug-ins installés.
-
-> Un plug-in s’exécute avec les droits de la page : c’est un choix de l’utilisateur, comme une extension d’éditeur. L’API n’est pas une frontière de sécurité, c’est une **frontière de contrat** — elle protège vos plug-ins des changements internes de Bird, pas l’inverse.
-
-### Plug-in livré : Motif vectoriel
-
-| | |
-|---|---|
-| **Motifs** | Rayures, Damier, Pois, Vagues, Chevrons, Triangles, Croix, Grille, Écailles |
-| **Réglages** | pas, épaisseur, angle, opacité, couleur du motif, couleur de fond, fond opaque |
-| **Sorties** | *Texture* — un seul `fabric.Pattern` (léger, idéal pour un fond) · *Vecteur* — de vraies formes Fabric (4000 max), exportables en PDF/EPS |
-| **Portée** | plan de travail entier ou sélection (remplissage ou remplacement) |
-
-Chaque motif est construit sur une **tuile de période entière** : le raccord est mathématiquement exact. Le motif est décrit une seule fois en primitives (`rect`, `circle`, `line`, `poly`), puis rendu par deux moteurs — Canvas2D pour l’aperçu et la texture, Fabric pour la vectorisation. Une description, deux rendus, aucune divergence.
+> A plug-in runs with page privileges — it is a user choice, like an editor
+> extension. The API is a **contract boundary** that protects your plug-ins from
+> internal changes, not a security sandbox.
 
 ---
 
-## Création assistée par IA
+## Detachable widgets
 
-Deux fournisseurs, deux philosophies :
+Every section of the right panel can be detached into a floating card: drag by
+the header, collapse, dock back. Position is remembered.
 
-| Fournisseur | Modèles | Principe |
-|---|---|---|
-| **OpenRouter** | `openrouter/free`, GLM 5.2, MiniMax M3, North Mini Code, DeepSeek Chat / R1, GPT-5.6 Luna, Claude Sonnet 5 | Le modèle **écrit le SVG** : formes éditables, aucun raster |
-| **OpenRouter · SVG natif** | Recraft V4 / V4.1 (Pro) | génération vectorielle spécialisée, facturée à l’usage |
-| **DeepSeek** | `deepseek-chat` (V3, rapide), `deepseek-reasoner` (R1, réfléchi) | API directe `api.deepseek.com`, écriture du SVG en code |
-
-Sélecteur **Fournisseur** dans la fenêtre IA, clés stockées séparément (`sessionStorage`, jamais dans le fichier projet). Le bouton ↻ actualise le catalogue du fournisseur choisi ; en mode DeepSeek, « SVG natif » est désactivé (il n’existe pas chez eux).
-
-Tout SVG généré passe par le **même nettoyeur** que l’import : scripts, `foreignObject`, `on*` et références externes sont supprimés avant insertion.
-
----
-
-## Import
-
-| Format | Méthode | Résultat |
-|---|---|---|
-| `.svg` / `.svgz` | parseur SVG sécurisé + Fabric | objets vectoriels éditables |
-| `.pdf` | **pdf.js** (chemins, clips, couleurs, textes, images) | groupe vectoriel éditable (page 1) |
-| `.ai` moderne | détection par signature → import PDF | vectoriel éditable |
-| `.ai` / `.eps` PostScript | interpréteur Adobe Illustrator niveau 2 | chemins Fabric éditables |
-| `.png .jpg .webp .gif .bmp .avif` | bitmap | image éditable |
-| `.webm .mp4` | première frame | vignette |
-| `.plume` / `.bird` / `.json` | schéma `bird-vector-project` v2/v3 | document complet + guides + calques |
-
-Le presse-papiers système est aussi pris en charge : collez un SVG ou une image directement sur le plan de travail.
-
-### PDF multi-pages
-
-À l’import d’un PDF de plus d’une page, Bird demande quoi faire :
-
-| Choix | Résultat |
-|---|---|
-| **Première page** | comportement historique : un seul plan de travail |
-| **Une page précise** | un plan, la page demandée, contenu centré comme un import classique |
-| **Toutes les pages** | **un plan de travail par page**, au format exact de la page PDF (595 × 842, 842 × 595, 300 × 300…), contenu placé à **1:1** et non réduit |
-
-Les pages importées sont ajoutées à la suite des plans existants : rien n’est écrasé.
-
-## Plans de travail
-
-Un document contient plusieurs plans de travail, chacun avec son format, son fond et son contenu.
-
-- **Panneau *Plans de travail*** : liste numérotée, nom éditable (double-clic), dimensions, nombre d’objets, monter/descendre, supprimer (confirmation si le plan n’est pas vide).
-- **Sélecteur flottant** en bas du plan de travail, visible dès deux plans : `‹ Plan › ` + compteur, cliquable pour ouvrir le panneau.
-- **Raccourcis** `Ctrl+Page↑` / `Ctrl+Page↓`.
-- **Historique isolé par plan** : annuler sur le plan A ne touche pas le plan B. Les piles sont mémorisées au changement de plan.
-- **Persistance** : le projet `.plume` enregistre tous les plans (`pages[]` + `activePage`). Un ancien projet mono-plan s’ouvre comme un document à un seul plan.
+Because the **DOM node itself is moved** (not cloned), every listener keeps
+working — a detached layer panel is still the live layer panel.
 
 ```js
-Bird.pages.list()                  // [{ index, id, name, width, height, active }]
-Bird.pages.count()
-Bird.pages.go(2)                   // afficher le 3e plan
-Bird.pages.add('Couverture')       // nouveau plan vide
-Bird.pages.duplicate()             // copie du plan actif, juste après lui
-Bird.pages.rename(1, 'Page de garde')
-Bird.pages.remove(2)
-Bird.pages.move(3, -1)
+Bird.widgets.detach('layers');
+Bird.widgets.dockAll();
+Bird.widgets.reset();
 ```
-
-## Export
-
-- **SVG** : document ou sélection, fond plan de travail / transparent / blanc.
-- **PDF vectoriel** : via `svg2pdf` + jsPDF, compatible Illustrator et imprimeurs.
-- **PDF multi-plans** : portée *Tous les plans de travail* → un PDF, une page par plan, chacune à son format.
-- **PNG** transparent, **JPG** fond blanc, **WEBP**, avec échelle 1× à 4×.
-- **Copie dans le presse-papiers** (SVG ou image).
-- **Projet `.plume`** : JSON versionné, migration automatique des anciens projets.
-
-> PDF : les polices non standard sont ramenées à Helvetica / Times / Courier. Pour une fidélité typographique parfaite, exportez en PNG ou installez la police dans le système.
-
-## Fiabilité
-
-- **Annuler / rétablir** couvre les créations, déplacements, rotations, réglages du panneau, verrouillage, plug-ins.
-- **Sauvegarde automatique** dans `localStorage` et bascule automatique vers **IndexedDB** au-delà de 4,2 Mo (images embarquées).
-- Historique limité à 60 états, transactions coalescées pour les réglages continus.
-- Tout le contenu importé est **nettoyé** : scripts, `foreignObject`, gestionnaires `on*`, références externes.
 
 ---
 
-## Raccourcis
+## AI-assisted drawing
 
-| Touche | Action |
+| Provider | Models | Principle |
+|---|---|---|
+| **OpenRouter** | `openrouter/free`, GLM 5.2, MiniMax M3, North Mini Code, DeepSeek Chat / R1, GPT-5.6 Luna, Claude Sonnet 5 | the model **writes SVG** — editable shapes, no raster |
+| **OpenRouter · native SVG** | Recraft V4 / V4.1 (Pro) | specialised vector generation, billed per use |
+| **DeepSeek** | `deepseek-chat` (V3, fast), `deepseek-reasoner` (R1) | direct API, SVG as code |
+
+Keys are stored per provider in `sessionStorage` and never written into a project
+file. Every generated SVG goes through the same sanitiser as imports.
+
+---
+
+## Keyboard shortcuts
+
+`Cmd` is accepted everywhere `Ctrl` is, so the same build behaves natively on
+macOS.
+
+| Keys | Action |
 |---|---|
-| `V` | Sélection |
-| `P` | Plume |
-| `N` | Crayon |
-| `B` | Pinceau vectoriel |
-| `I` | Pipette |
-| `R` / `E` / `L` / `T` | Rectangle / Ellipse / Ligne / Texte |
-| `H` ou `Espace` | Déplacer (main) |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Annuler / Rétablir |
-| `Ctrl+A` | Tout sélectionner |
-| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copier / Couper / Coller (interne + presse-papiers SVG) |
-| `Ctrl+D` | Dupliquer |
-| `Ctrl+G` / `Ctrl+Shift+G` | Grouper / Dégrouper |
-| `Ctrl+2` / `Ctrl+3` | Verrouiller / Masquer la sélection |
-| `Ctrl+0` | Ajuster à l’écran |
-| `Maj+1` / `Maj+2` | Ajuster à l’écran / Zoom sur la sélection |
-| `Ctrl+R` | Règles |
-| `Ctrl+'` | Grille |
-| `Ctrl+;` | Magnétisme |
+| `V` `P` `N` `B` `I` | Select / Pen / Pencil / Brush / Eyedropper |
+| `R` `E` `L` `T` `H` | Rectangle / Ellipse / Line / Text / Hand |
+| `Space` (hold) | Temporary pan |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
+| `Ctrl+A` `Ctrl+C` `Ctrl+X` `Ctrl+V` `Ctrl+D` | Select all, copy, cut, paste, duplicate |
+| `Ctrl+G` / `Ctrl+Shift+G` | Group / Ungroup |
+| `Ctrl+2` / `Ctrl+3` | Lock / hide selection |
+| `Ctrl+0` / `Shift+1` / `Shift+2` | Fit view / fit / zoom to selection |
+| `Ctrl+1` | Zoom 100 % |
+| `Ctrl+=` / `Ctrl+-` | Zoom in / out |
+| `Ctrl+R` / `Ctrl+'` / `Ctrl+;` | Rulers / grid / snapping |
 | `Ctrl+K` | Plug-ins |
-| `Ctrl+Page↑` / `Ctrl+Page↓` | Plan de travail précédent / suivant |
-| `Suppr` | Supprimer |
-| `Flèches` / `Maj+Flèches` | Déplacer de 1 px / 10 px |
-| `Échap` / `Entrée` | Terminer / annuler un tracé (ou `Échap` pendant un glissement de repère) |
+| `Ctrl+,` | Preferences |
+| `Ctrl+PageUp` / `Ctrl+PageDown` | Previous / next artboard |
+| `Delete`, arrows, `Shift+arrows` | Delete, nudge 1 px, nudge 10 px |
+| `Esc` / `Enter` | Cancel / finish the current path or guide drag |
 
 ---
 
@@ -311,130 +261,145 @@ Bird.pages.move(3, -1)
 
 ```
 bird/
-├── index.html                 interface (DOM stable, réutilisé par Astro)
-├── css/style.css              design : IBM Plex Mono, noir & blanc, grille 4 px
-├── icons/
-│   ├── bird-logo.svg          logo complet (5 oiseaux) — splash
-│   ├── bird-logo-gray.svg     logo complet en gris clair — aperçu du plan vide
-│   ├── bird-mark.svg          marque seule — barre haute
-│   ├── bird-mark-white.svg    marque inversée — panneaux sombres
-│   ├── favicon.svg            favicon (carré arrondi + marque centrée)
-│   └── icon-180/192/512.png   icônes PWA
+├── index.html                  UI (stable DOM, reused by Astro and Tauri)
+├── css/style.css               IBM Plex Mono, black & white, 4 px grid
+├── icons/                      logo variants, favicon, PWA icons
 ├── js/
-│   ├── fabric.min.js          moteur canvas (Fabric.js 5.1)
-│   ├── paper-full.min.js      Pathfinder et conversion en chemins (Paper.js)
-│   ├── io.js                  échange : SVG, PDF/AI, EPS, export PDF, IndexedDB
-│   ├── eps-import.js          interpréteur PostScript (Illustrator niveau 2)
-│   ├── widgets.js             panneaux détachables (carte flottante + mémoire)
-│   ├── plugins.js             hôte de plug-ins : registre, tiroir, API
-│   ├── pdf.min.js             lecture PDF (pdf.js 3.11, chargé à la demande)
-│   ├── pdf.worker.min.js      worker pdf.js
-│   ├── jspdf.umd.min.js       écriture PDF
-│   ├── svg2pdf.umd.min.js     SVG → PDF vectoriel
-│   └── app.js                 application : outils, historique, calques, export
-├── plugins/
-│   └── motif-vectoriel.plugin.js   plug-in livré (textures sans raccord)
-├── astro/                     version Astro (pages, SEO, PWA, API)
-├── rust/                      moteur Rust : CLI, serveur local, conversion
-├── llms.txt                   manifeste lisible par les LLM
-└── manifest.webmanifest       PWA
+│   ├── fabric.min.js           canvas engine (Fabric.js 5.1)
+│   ├── paper-full.min.js       boolean ops, path maths (Paper.js)
+│   ├── opentype.min.js         font parsing → glyph outlines
+│   ├── io.js                   SVG / PDF / AI / EPS import, screen PDF, IndexedDB
+│   ├── eps-import.js           PostScript interpreter (Illustrator level 2)
+│   ├── icc.js                  sRGB → CMYK, ICC profile build & read
+│   ├── pdfx.js                 PDF/X-1a writer (CMYK, shadings, output intent)
+│   ├── vector-tools.js         text→curves, outline, offset, simplify, symbols, blend
+│   ├── widgets.js              detachable panels
+│   ├── plugins.js              plug-in host, registry, settings drawer
+│   └── app.js                  application: tools, history, layers, export
+├── plugins/motif-vectoriel.plugin.js
+├── astro/                      Astro version (marketing, docs, PWA, API routes)
+├── rust/                       bird-core + bird-cli (no Node required)
+├── desktop/                    Tauri 2 shell → macOS, Windows, Linux
+└── .github/workflows/          multi-OS desktop build
 ```
 
-### API d’intégration
+### JavaScript API
 
 ```js
-Bird.version                         // '1.7.0'
-Bird.document.new()                  // nouveau document
-Bird.document.payload()              // projet sérialisé (tous les plans)
-Bird.document.load(payload)          // ouvre un projet
-Bird.document.open(file)             // importe un File (tous formats)
-Bird.io.importPDF(arrayBuffer)       // → { svg, width, height, pages, page }
-Bird.io.pdfPageCount(arrayBuffer)    // → { pages, sizes:[{ index, width, height }] }
-Bird.io.svgPagesToPDF([{ svg, width, height }])  // → PDF multi-pages
-Bird.io.importEPS(arrayBuffer)       // → groupe Fabric
-Bird.io.importSVG(svgText)
-Bird.export({ format:'pdf', scope:'document', background:'artboard', returnBlob:true })
-Bird.export({ format:'pdf', scope:'pages', returnBlob:true })   // une page par plan
-Bird.exportSVG({ background:'transparent' })
-Bird.zoom.selection()
+Bird.version                                   // '1.9.0'
+Bird.document.new() / .payload() / .load(p)
+Bird.document.open(file)                       // any supported format
+Bird.export({ format: 'pdfx', scope: 'document', returnBlob: true })
+Bird.export({ format: 'pdf', scope: 'pages', returnBlob: true })
+Bird.exportSVG({ background: 'transparent' })
 
-Bird.pages.count()                   // plans de travail
-Bird.pages.go(1)
-Bird.pages.add('Plan 3')
+Bird.pages.list() / .count() / .go(n) / .add(name) / .duplicate() / .remove(n)
+Bird.view.rulers(true) / .grid(false) / .snap(true)
+Bird.widgets.detach('layers') / .dockAll()
+BirdPlugins.list() / .open(id) / .toggle(id)
 
-Bird.view.rulers(true)               // règles / grille / magnétisme
-Bird.view.grid(false)
-Bird.view.snap(true)
-
-Bird.widgets.dockAll()               // panneaux détachables
-Bird.widgets.detach('layers')
-
-BirdPlugins.list()                   // manifestes enregistrés
-BirdPlugins.open('motif-vectoriel')  // ouvre le tiroir de réglages
-BirdPlugins.toggle('mon-plugin')     // active / désactive
+Bird.io.pdfPageCount(buffer)                   // { pages, sizes }
+Bird.io.svgPagesToPDF([{ svg, width, height }])
 ```
 
 ---
 
-## Version Astro
+## Desktop builds
 
-`astro/` encapsule exactement le même moteur : une seule source de vérité, deux livraisons.
+`desktop/` is a thin **Tauri 2** shell around the same engine — no logic is
+duplicated. It adds native file dialogs, a real application window, and a
+signable binary per platform.
+
+```bash
+cd desktop
+npm install
+npm run icons      # generates .ico / .icns / png from icons/icon-512.png
+npm run dev        # development window
+npm run build      # installer for the current OS
+```
+
+**macOS and Linux installers cannot be produced on Windows** (and vice versa):
+they need their own toolchain and code-signing. The GitHub Actions matrix in
+`.github/workflows/desktop.yml` builds all four targets on every `v*` tag and
+attaches the artefacts to the release:
+
+| Platform | Artefact |
+|---|---|
+| macOS Apple Silicon | `.dmg` (`aarch64-apple-darwin`) |
+| macOS Intel | `.dmg` (`x86_64-apple-darwin`) |
+| Windows | `.msi` + `.exe` (NSIS) |
+| Linux | `.deb`, `.rpm`, `.AppImage` |
+
+`.plume` and `.bird` files are registered as document types, so double-clicking a
+project opens Bird.
+
+---
+
+## Astro version
+
+`astro/` wraps exactly the same engine: one source of truth, two deliveries.
 
 ```bash
 cd astro
 npm install
-npm run sync      # copie js/, css/, icons/, plugins/ et l’interface
+npm run sync       # copies js/, css/, icons/, plugins/ and the editor shell
 npm run dev
-npm run build     # sortie dist/ (adapter node)
+npm run build
 ```
 
-Le script `sync` extrait la coquille de l’éditeur depuis `../index.html` et copie les assets sous `public/assets/bird/` : toute modification de l’interface doit être suivie d’un `npm run sync`.
+Re-run `npm run sync` after changing `index.html`, the CSS, or a plug-in.
 
-## Moteur Rust
+## Rust engine
 
-`rust/` est un espace de travail Cargo indépendant (aucun Node requis) :
+`rust/` is an independent Cargo workspace (no Node needed):
 
-- `bird-core` — lecture/écriture du format `.plume`, géométrie, validation ;
-- `bird-cli` — `bird-cli info`, `bird-cli export svg|json`, `bird-cli serve`.
+- `bird-core` — `.plume` reading/writing, geometry, validation;
+- `bird-cli` — `info`, `export svg|json`, `serve`.
 
 ```bash
 cd rust
-cargo test                  # 14 tests
+cargo test
 cargo run -p bird-cli -- info examples/sample.plume
 ```
 
-Sous Windows, `scripts/build.ps1` configure la chaîne MinGW WinLibs attendue par la machine de build.
+---
+
+## Development notes
+
+Local autosave fires 1.2 s after each change and on close. PDF/EPS libraries are
+lazy-loaded on first use. UI preferences (detached widgets, active plug-ins,
+plug-in settings, loaded fonts) live in `localStorage`/IndexedDB and never enter
+the project file.
+
+Two bugs worth remembering, both fixed and documented in the code:
+
+- `pdf.js` **transfers** the buffer you hand it. Counting pages then converting
+  the same buffer failed with *detached ArrayBuffer* — every read now works on
+  its own copy.
+- `fabric.Object.clone(callback)` is **asynchronous** and returns nothing. Using
+  it as a synchronous factory pushed `undefined` into the canvas and broke layer
+  rendering; batch duplication goes through `enlivenObjects`.
 
 ---
 
-## Développement
+## Roadmap
 
-Aucune compilation pour la version principale :
-
-```bash
-npx serve .          # http://localhost:3000
-```
-
-La sauvegarde locale est déclenchée 1,2 s après chaque modification, et à la fermeture.
-Les bibliothèques PDF/EPS ne sont téléchargées qu’au premier import ou export concerné.
-Les préférences d’interface (widgets détachés, plug-ins actifs, réglages de plug-ins) vivent dans `localStorage` et n’entrent jamais dans le fichier projet.
+- [x] Multiple artboards
+- [x] Multi-page PDF import with a page picker
+- [x] Multi-artboard PDF export
+- [x] PDF/X-1a, CMYK, ICC output intent
+- [x] Text → curves (no font fallback)
+- [x] Real PDF gradients (shadings)
+- [x] Outline stroke, offset path, simplify, symbols, blend
+- [x] Native desktop shell (macOS, Windows, Linux)
+- [ ] Incremental history (avoid full JSON snapshots with images)
+- [ ] WebGL / OffscreenCanvas rendering for very large documents
+- [ ] Playwright visual regression tests on import/export
+- [ ] Local-first collaboration (CRDT) and version history
+- [ ] Full i18n and accessibility pass (keyboard navigation, ARIA panels)
 
 ---
 
-## Feuille de route
+## Licence
 
-- [x] Multi-plans de travail / pages
-- [x] Import PDF multi-pages avec sélecteur de page
-- [x] Export PDF multi-plans
-- [ ] Texte PDF vraiment vectoriel (embarquement de polices ou conversion en courbes)
-- [ ] Export PDF/X-1a, CMJN et profils ICC
-- [ ] Dégradés PDF réels (shadings axiaux/radiaux)
-- [ ] Contour de trait, décalage de tracé, simplification, symboles, blend tool
-- [ ] Historique incrémental (alléger les instantanés avec images)
-- [ ] Rendu WebGL / OffscreenCanvas pour les gros documents
-- [ ] Version desktop Tauri s’appuyant sur `bird-core`
-- [ ] Tests Playwright de non-régression visuelle
-- [ ] Collaboration local-first (CRDT) et gestion de versions
-- [ ] i18n et accessibilité complète
-
-© Zigmoon — Bird
+Proprietary — © Zigmoon. All rights reserved.

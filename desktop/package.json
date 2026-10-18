@@ -1,0 +1,19 @@
+{
+  "name": "bird-desktop",
+  "private": true,
+  "version": "1.9.0",
+  "description": "Coquille native de Bird (macOS, Windows, Linux) — Tauri 2",
+  "type": "module",
+  "scripts": {
+    "stage": "node scripts/stage.mjs",
+    "dev": "node scripts/stage.mjs && tauri dev",
+    "build": "node scripts/stage.mjs && tauri build",
+    "icons": "tauri icon ../icons/icon-512.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
