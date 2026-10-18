@@ -1,0 +1,69 @@
+# BIRD
+
+BIRD est un éditeur vectoriel local-first qui fonctionne entièrement dans le navigateur.
+Il permet de créer des illustrations, logos et mises en page, puis de les importer/exporter
+dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
+
+## Fonctionnalités
+
+- Outil Plume (courbes de Bézier) avec édition des ancres et poignées
+- Crayon et pinceaux vectoriels (Ligne, Encre, Marker, Spray, Néon)
+- Formes paramétrables : rectangle (rayon), ellipse, ligne, étoile, polygone
+- Texte éditable (police, taille, gras, italique, alignement)
+- Pathfinder vectoriel (union, soustraction, intersection, exclusion)
+- Panneau Calques : sélection, renommage, visibilité, verrouillage, ordre
+- Règles, repères, grille et magnétisme
+- Remplissage, contour, pointillés, opacité, modes de fusion
+- Alignement, répartition, miroir, zoom sur sélection
+- Pipette et presse-papiers SVG/image
+- Plug-ins : registre extensible, API stable, panneau de réglages généré, motif vectoriel inclus
+- Widgets détachables : chaque panneau de droite peut flotter et se replier
+- Création assistée par IA (OpenRouter, DeepSeek) et SVG natif Recraft
+- Import SVG, SVGZ, PDF, Adobe Illustrator (.ai), EPS, images et vidéos
+- Export SVG, PDF vectoriel, PNG, JPG, WEBP (document ou sélection)
+- Projet .plume (JSON) versionné, sauvegarde automatique localStorage/IndexedDB
+- Historique annuler / rétablir
+
+## Formats
+
+- Import : .svg .svgz .pdf .ai .eps .plume .bird .json .png .jpg .webp .gif .bmp .avif .webm .mp4
+- Export : .svg .pdf .png .jpg .webp .plume
+- Un fichier .ai moderne (PDF compatible) est importé en vectoriel via pdf.js.
+- Un .ai/.eps PostScript est interprété par le moteur Adobe Illustrator niveau 2.
+
+## Raccourcis
+
+- V : sélection, P : plume, N : crayon, B : pinceau, I : pipette
+- R : rectangle, E : ellipse, L : ligne, T : texte, H : main
+- Espace : main temporaire
+- Ctrl+Z / Ctrl+Shift+Z : annuler / rétablir
+- Ctrl+D : dupliquer, Ctrl+G / Ctrl+Shift+G : grouper / dégrouper
+- Ctrl+2 / Ctrl+3 : verrouiller / masquer
+- Ctrl+0 : ajuster à l'écran, Maj+1 / Maj+2 : ajuster / zoom sélection
+- Ctrl+R : règles, Ctrl+' : grille, Ctrl+; : magnétisme
+- Ctrl+K : plug-ins
+- Suppr : supprimer, Échap / Entrée : terminer un tracé
+
+## API
+
+- Bird.document.new(), Bird.document.open(file), Bird.document.payload()
+- Bird.io.importSVG(text), Bird.io.importPDF(arrayBuffer), Bird.io.importEPS(arrayBuffer)
+- Bird.export({ format, scope, background, scale, returnBlob })
+- Bird.exportSVG({ background })
+- Bird.view.rulers(bool), Bird.view.grid(bool), Bird.view.snap(bool)
+- Bird.widgets.detach(name) / dock(name) / dockAll() / reset()
+- BirdPlugins.register(manifest), BirdPlugins.list(), BirdPlugins.toggle(id)
+
+## Plug-ins
+
+Un plug-in est un fichier .plugin.js qui appelle BirdPlugins.register() avec un manifeste
+(id, name, version, ui.fields, run, preview). Il reçoit une API : fabric, canvas, document,
+selection(), add(), replaceSelection(), begin()/commit(), toast(), settings, svgToGroup().
+Plug-in livré : « Motif vectoriel » — rayures, damier, pois, vagues, chevrons, triangles,
+croix, grille, écailles. Sortie texture (un fabric.Pattern) ou vectorielle (formes réelles).
+
+## Versions
+
+- / : version web autonome (aucune compilation)
+- /astro/ : version Astro (SEO, PWA, routes API)
+- /rust/ : moteur Rust (CLI, serveur local, conversion de projets)

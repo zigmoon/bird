@@ -1,0 +1,37 @@
+{
+  "name": "BIRD — Éditeur vectoriel",
+  "short_name": "BIRD",
+  "description": "Éditeur vectoriel local-first : Bézier, calques, règles, Pathfinder, plug-ins, import PDF/AI/SVG/EPS et export SVG/PDF.",
+  "start_url": "/editor",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icons/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "scope": "/",
+  "id": "/editor"
+}

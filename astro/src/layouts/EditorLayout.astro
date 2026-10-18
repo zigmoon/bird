@@ -1,0 +1,52 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'Bird — Studio vectoriel',
+  description = 'Éditeur vectoriel local-first : Bézier, calques, import PDF/AI, export SVG/PDF.'
+} = Astro.props;
+---
+<!doctype html>
+<html lang="fr" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="google" content="notranslate" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="application-name" content="Bird" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site || 'https://app.zigmoon.com')} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/assets/bird/css/style.css" />
+    <style is:inline>
+      .toolbar { position: relative; }
+      .canvas-container { position: relative; }
+      .canvas-wrapper { position: relative; }
+      .astro-badge {
+        position: fixed; right: 10px; bottom: 10px; z-index: 99999;
+        font: 9px/1 'IBM Plex Mono', monospace; letter-spacing: .08em;
+        padding: 4px 7px; border: 1px solid #e0e0e0; border-radius: 3px;
+        background: rgba(255,255,255,.92); color: #666; text-decoration: none;
+        opacity: .55; transition: opacity .15s;
+      }
+      .astro-badge:hover { opacity: 1; }
+      @media (max-width: 700px) { .astro-badge { display: none; } }
+    </style>
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+    <a class="astro-badge" href="/docs#astro" title="Version Astro de Bird">ASTRO</a>
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    </script>
+  </body>
+</html>

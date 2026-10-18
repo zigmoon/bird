@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.astro/
+.env
+.env.*
+!.env.example
+
+# Copies générées par `npm run sync` (scripts/sync-engine.mjs) : la source de
+# vérité reste ../js, ../css, ../icons, ../plugins et ../index.html.
+public/assets/bird/
+src/generated/

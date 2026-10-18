@@ -1,0 +1,82 @@
+#!/usr/bin/env node
+/**
+ * Synchronise le moteur Bird (source unique : ../index.html, ../js, ../css, ../icons)
+ * vers le projet Astro :
+ *   - public/assets/bird/**  → fichiers servis tels quels
+ *   - src/generated/editor-shell.html → DOM de l'éditeur (sans les <script>)
+ *
+ * Ce script est lancé automatiquement avant `dev`, `build` et après `npm install`.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const astroRoot = path.resolve(__dirname, '..');
+const birdRoot = path.resolve(astroRoot, '..');
+const publicRoot = path.join(astroRoot, 'public');
+const assetsRoot = path.join(publicRoot, 'assets', 'bird');
+
+function copyDir(src, dst) {
+  fs.rmSync(dst, { recursive: true, force: true });
+  fs.mkdirSync(dst, { recursive: true });
+  fs.cpSync(src, dst, { recursive: true });
+}
+
+function copyIfExists(src, dst) {
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
+}
+
+function main() {
+  for (const dir of ['js', 'css', 'icons', 'plugins']) {
+    const src = path.join(birdRoot, dir);
+    if (!fs.existsSync(src)) throw new Error(`Dossier source manquant : ${src}`);
+    copyDir(src, path.join(assetsRoot, dir));
+  }
+  copyIfExists(path.join(birdRoot, 'llms.txt'), path.join(publicRoot, 'llms.txt'));
+  copyIfExists(path.join(birdRoot, 'manifest.webmanifest'), path.join(publicRoot, 'manifest.webmanifest'));
+  copyIfExists(path.join(birdRoot, 'icons', 'favicon.svg'), path.join(publicRoot, 'favicon.svg'));
+
+  const html = fs.readFileSync(path.join(birdRoot, 'index.html'), 'utf8');
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (!bodyMatch) throw new Error('index.html : <body> introuvable');
+
+  let body = bodyMatch[1]
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/(src|href)="icons\//g, '$1="/assets/bird/icons/')
+    .replace(/(src|href)="css\//g, '$1="/assets/bird/css/')
+    .replace(/(src|href)="js\//g, '$1="/assets/bird/js/');
+
+  const generated = path.join(astroRoot, 'src', 'generated');
+  fs.mkdirSync(generated, { recursive: true });
+  fs.writeFileSync(path.join(generated, 'editor-shell.html'), body, 'utf8');
+
+  // Manifeste PWA adapté aux routes Astro.
+  const manifestPath = path.join(publicRoot, 'manifest.webmanifest');
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      manifest.start_url = '/editor';
+      manifest.scope = '/';
+      manifest.id = '/editor';
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    } catch (err) {
+      console.warn('[bird-astro] manifeste invalide, ignoré :', err.message);
+    }
+  }
+
+  const dirSize = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((sum, entry) => {
+    const full = path.join(dir, entry.name);
+    return sum + (entry.isDirectory() ? dirSize(full) : fs.statSync(full).size);
+  }, 0);
+  const size = (p) => (dirSize(p) / 1024).toFixed(0) + ' Ko';
+  console.log('[bird-astro] moteur synchronisé → public/assets/bird/ (' +
+    size(path.join(assetsRoot, 'js')) + ' de JavaScript)');
+  console.log('[bird-astro] shell éditeur → src/generated/editor-shell.html (' +
+    (body.length / 1024).toFixed(1) + ' Ko)');
+}
+
+main();

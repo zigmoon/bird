@@ -1,0 +1,11 @@
+[package]
+name = "bird-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CLI Bird : inspecter, valider et convertir des projets .plume"
+
+[dependencies]
+bird-core = { path = "../bird-core" }
+serde_json.workspace = true

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="fr" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="google" content="notranslate">
+<title>Bird — Éditeur vectoriel gratuit | Import PDF/AI, SVG, export PDF</title>
+<meta name="description" content="Bird : éditeur vectoriel gratuit dans le navigateur. Bézier, calques, règles et repères, Pathfinder, import SVG/PDF/AI/EPS, export SVG et PDF vectoriel. Sans compte, local-first.">
+<meta name="keywords" content="éditeur vectoriel gratuit, dessin vectoriel en ligne, outil plume bézier, import PDF, import AI, import EPS, export SVG, export PDF vectoriel, alternative Illustrator, logiciel dessin vectoriel, Bird Zigmoon">
+<meta name="author" content="Zigmoon">
+<meta name="theme-color" content="#ffffff">
+<meta name="application-name" content="Bird">
+<link rel="canonical" href="https://app.zigmoon.com/bird/">
+<link rel="alternate" type="text/plain" title="LLMs manifest" href="llms.txt">
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .toolbar { position: relative; }
+  .canvas-container { position: relative; }
+  .canvas-wrapper { position: relative; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ SPLASH SCREEN ═══════════ -->
+<div id="splashScreen" class="splash-screen">
+  <div class="splash-card">
+    <div class="splash-logo-panel">
+      <img class="splash-panel-mark" src="icons/bird-mark-white.svg" alt="" aria-hidden="true">
+      <div class="splash-brand-big">BIRD</div>
+      <div class="splash-brand-sub">ÉDITEUR VECTORIEL</div>
+    </div>
+    <div class="splash-media">
+      <img class="splash-logo-big" src="icons/bird-logo.svg" alt="Bird">
+    </div>
+    <div class="splash-info">
+      <div class="splash-subtitle">LOCAL-FIRST VECTOR STUDIO</div>
+      <div class="splash-version">v1.6 — PDF · AI · EPS · SVG · PDF/X</div>
+      <div class="splash-section">
+        <div class="splash-label">Créateurs</div>
+        <div class="splash-text">Simon Dupont-Gellert</div>
+        <div class="splash-text">Clémence Brunet</div>
+      </div>
+      <div class="splash-footer">Chargement…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ POP-IN DÉMARRAGE (Reprendre / Ouvrir / Nouveau) ═══════════ -->
+<div id="startupOverlay" role="dialog" aria-modal="true" aria-labelledby="startupTitle" hidden>
+  <div id="startupPopin">
+    <div class="startup-logo">
+      <img src="icons/favicon.svg" alt="BIRD">
+      <span>BIRD</span>
+    </div>
+    <h2 class="startup-title" id="startupTitle">Bon retour</h2>
+    <p class="startup-desc" id="startupDesc">Une session précédente a été trouvée.</p>
+    <div class="startup-meta" id="startupMeta">
+      <span id="startupMetaDate">—</span>
+      <span id="startupMetaCount">—</span>
+    </div>
+    <div class="startup-loading" id="startupLoading">
+      <div class="startup-spinner"></div>
+      <span>Chargement…</span>
+    </div>
+    <div class="startup-actions" id="startupActions">
+      <button class="startup-btn startup-btn--primary" id="startupResume" type="button">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M5 3l11 7-11 7V3z"/></svg>
+        <span>Reprendre le document</span>
+      </button>
+      <button class="startup-btn" id="startupOpen" type="button">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7h5l2-2h7v11H3V7z"/></svg>
+        <span>Ouvrir depuis l'ordinateur</span>
+      </button>
+      <button class="startup-btn startup-btn--muted" id="startupNew" type="button">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
+        <span>Nouveau document</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="app">
+  <!-- ═══════════ TOP BAR ═══════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="brand" id="brandHome" type="button" title="Bird — retour au document">
+        <img class="logo" src="icons/bird-mark.svg" alt="Bird">
+        <span class="brand-name">BIRD</span>
+        <span class="doc-dirty" id="dirtyDot" title="Modifications non enregistrées" hidden>●</span>
+      </button>
+      <span class="sep"></span>
+      <button class="btn btn-square" id="btnNew" title="Nouveau document">+</button>
+      <button class="btn btn-square" id="btnOpen" title="Ouvrir un fichier (.plume, SVG, PDF, AI, EPS…)" aria-label="Ouvrir">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2-2h7v11H3V7z"/></svg>
+      </button>
+      <button class="btn btn-square" id="btnSave" title="Enregistrer le fichier .plume (Ctrl+S)" aria-label="Enregistrer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      </button>
+    </div>
+
+    <div class="topbar-center">
+      <div class="btn-group-tight">
+        <button class="btn btn-square" id="btnUndo" title="Annuler (Ctrl+Z)" aria-label="Annuler" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-1"/></svg>
+        </button>
+        <button class="btn btn-square" id="btnRedo" title="Rétablir (Ctrl+Shift+Z)" aria-label="Rétablir" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h1"/></svg>
+        </button>
+      </div>
+      <div class="btn-group-tight">
+        <button class="btn btn-square" id="btnGroup" type="button" title="Grouper la sélection (Ctrl+G)" aria-label="Grouper la sélection" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="9" height="9" rx="1"/><rect x="8.5" y="8.5" width="9" height="9" rx="1"/></svg>
+        </button>
+        <button class="btn btn-square" id="btnUngroup" type="button" title="Dégrouper la sélection (Ctrl+Shift+G)" aria-label="Dégrouper la sélection" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1"/><rect x="11" y="11" width="6.5" height="6.5" rx="1"/><path d="m10 6 4-4m0 0h-3m3 0v3M10 14l-4 4m0 0h3m-3 0v-3"/></svg>
+        </button>
+      </div>
+      <span class="toolbar-divider"></span>
+      <button class="btn btn-square is-on" id="btnRulers" type="button" title="Règles (Ctrl+R) — afficher ou masquer" aria-label="Règles" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="5"/><path d="M6 3v2M10 3v3M14 3v2M18 3v3"/><path d="M3 12h4M3 16h6M3 20h3"/></svg>
+      </button>
+      <button class="btn btn-square" id="btnGrid" type="button" title="Grille (Ctrl+') — afficher ou masquer" aria-label="Grille" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+      </button>
+      <button class="btn btn-square is-on" id="btnSnap" type="button" title="Magnétisme (Ctrl+;) — repères, grille et objets" aria-label="Magnétisme" aria-pressed="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 8h4M14 8h4"/><path d="M12 17v4"/></svg>
+      </button>
+      <span class="toolbar-divider"></span>
+      <button class="btn btn-square" id="btnPlugins" type="button" title="Plug-ins" aria-label="Plug-ins">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4M15 3v4"/><path d="M7 7h10v5a5 5 0 0 1-10 0V7z"/><path d="M12 17v4"/></svg>
+      </button>
+      <button class="btn btn-ai" id="btnAI" title="Créer un dessin vectoriel avec l’IA" aria-haspopup="dialog">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 1.2 4.1L15 7.5l-3.8 1.4L10 13l-1.2-4.1L5 7.5l3.8-1.4L10 2Z"/><path d="m16 12 .7 2.3L19 15l-2.3.7L16 18l-.7-2.3L13 15l2.3-.7L16 12Z"/></svg>
+        <span>IA</span>
+      </button>
+    </div>
+
+    <div class="topbar-right">
+      <div class="zoom-cluster">
+        <button class="btn btn-square" id="btnZoomOut" title="Zoom −" aria-label="Zoom arrière">−</button>
+        <span class="zoom-readout" id="zoomReadout">100%</span>
+        <button class="btn btn-square" id="btnZoomIn" title="Zoom +" aria-label="Zoom avant">+</button>
+        <button class="btn btn-square" id="btnFit" title="Ajuster à l'écran (Maj+1)" aria-label="Ajuster à l'écran">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+        </button>
+        <button class="btn btn-square" id="btnZoomSel" title="Zoom sur la sélection (Maj+2)" aria-label="Zoom sur la sélection">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6M11 8v6M8 11h6"/></svg>
+        </button>
+      </div>
+      <div class="export-menu" id="exportMenu">
+        <button class="btn btn-primary" id="btnExport" title="Exporter le document">EXPORT ▾</button>
+        <div class="export-list" id="exportList" hidden>
+          <button class="export-item" data-export="svg">SVG — vectoriel</button>
+          <button class="export-item" data-export="pdf">PDF — vectoriel (Illustrator)</button>
+          <button class="export-item" data-export="png">PNG — transparent</button>
+          <button class="export-item" data-export="jpg">JPG — fond blanc</button>
+          <button class="export-item" data-export="webp">WEBP</button>
+          <button class="export-item export-item--more" data-export="options">Options d’export…</button>
+        </div>
+      </div>
+      <button class="btn btn-square btn-gear" id="btnSettings" title="Préférences" aria-label="Préférences">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+      <input type="file" id="fileOpen" accept=".plume,.bird,.json,.svg,.svgz,.pdf,.ai,.eps,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.webm,.mp4,image/*,video/*" hidden>
+    </div>
+  </header>
+
+  <div class="workarea">
+    <!-- ═══════════ SIDEBAR GAUCHE (outils, fixe) ═══════════ -->
+    <nav class="sidebar" id="leftSidebar">
+      <div class="sidebar-tools">
+        <button class="tool active" data-tool="select" title="Sélection (V)">
+          <svg class="tool-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 3 L5 18 L9 14 L11.5 19.5 L13.5 18.7 L11 13.2 L17 13 Z"/>
+          </svg>
+        </button>
+        <button class="tool" data-tool="pen" title="Plume (P) — clic = sommet, drag = courbe">
+          <img src="icons/pen.svg" alt="Plume" class="tool-icon">
+        </button>
+        <button class="tool" data-tool="text" title="Texte (T)"><img src="icons/text.svg" alt="Texte" class="tool-icon"></button>
+        <button class="tool" data-tool="pencil" title="Crayon (N) — tracé libre">
+          <img src="icons/wave.svg" alt="Crayon" class="tool-icon">
+        </button>
+        <button class="tool" data-tool="brush" title="Pinceau vectoriel (B)">
+          <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.6 4.2 5.2 5.2L9.2 20H4v-5.2Z"/><path d="m12.5 6.3 5.2 5.2"/><path d="M4 20c2.2-2.3 3.1-3.9 2.8-5.2"/></svg>
+        </button>
+        <button class="tool" data-tool="eyedropper" title="Pipette (I) — prélever une couleur">
+          <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.5 3.5 2 2a2 2 0 0 1 0 2.8l-2.2 2.2-4.8-4.8 2.2-2.2a2 2 0 0 1 2.8 0Z"/><path d="m13.2 6.9 3.9 3.9-7.6 7.6-4.7.8.8-4.7 7.6-7.6Z"/><path d="m5 19 2.3-2.3"/></svg>
+        </button>
+        <div class="tool-dropdown" id="shapeDropdown">
+          <button class="tool" id="shapeTool" title="Formes (Rectangle, Ellipse, Ligne, Étoile, Polygone)">
+            <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <circle cx="17.5" cy="17.5" r="3.5"/>
+            </svg>
+            <span class="dropdown-indicator">▾</span>
+          </button>
+          <div class="tool-dropdown-menu" id="shapeMenu">
+            <button class="dropdown-item" data-tool="rect" title="Rectangle (R)">
+              <img src="icons/rect.svg" alt="Rectangle" class="tool-icon">
+              <span>Rectangle</span>
+            </button>
+            <button class="dropdown-item" data-tool="ellipse" title="Ellipse (E)">
+              <img src="icons/circle.svg" alt="Ellipse" class="tool-icon">
+              <span>Ellipse</span>
+            </button>
+            <button class="dropdown-item" data-tool="line" title="Ligne (L)">
+              <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+              <span>Ligne</span>
+            </button>
+            <button class="dropdown-item" data-tool="star" title="Étoile">
+              <img src="icons/star.svg" alt="Étoile" class="tool-icon">
+              <span>Étoile</span>
+            </button>
+            <button class="dropdown-item" data-tool="polygon" title="Polygone">
+              <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 3 21 9 18 20 6 20 3 9"/></svg>
+              <span>Polygone</span>
+            </button>
+          </div>
+        </div>
+        <span class="tool-sep"></span>
+        <button class="tool" data-tool="image" title="Importer une image"><img src="icons/image.svg" alt="Image" class="tool-icon"></button>
+        <span class="tool-sep"></span>
+        <button class="tool" data-tool="hand" title="Main / déplacer (H ou Espace)"><svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6"/></svg></button>
+        <input type="file" id="imgInput" accept="image/*,.svg,.eps,.webm,.mp4" hidden>
+      </div>
+    </nav>
+
+    <!-- ═══════════ CANVAS (zone de travail blanc infini) ═══════════ -->
+    <main class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <canvas class="ruler ruler-h" id="rulerH" aria-hidden="true"></canvas>
+      <canvas class="ruler ruler-v" id="rulerV" aria-hidden="true"></canvas>
+      <div class="ruler-corner" id="rulerCorner" title="Règles : glissez pour créer un repère"></div>
+      <div class="guides-layer" id="guidesLayer"></div>
+      <div class="guide-temp" id="guideTemp" hidden></div>
+      <div class="empty-hint" id="emptyHint">
+        <img class="empty-logo" src="icons/bird-logo.svg" alt="Bird" draggable="false">
+        <p class="muted">Choisissez un outil et dessinez,<br>ou déposez un fichier — SVG, PDF, AI, EPS.</p>
+        <p class="kbd">Plume <kbd>P</kbd> · Sélection <kbd>V</kbd> · Texte <kbd>T</kbd> · Plug-ins <kbd>Ctrl</kbd> <kbd>K</kbd><br>
+        Zoom molette · Espace = déplacer · <kbd>Ctrl</kbd>+<kbd>R</kbd> règles</p>
+      </div>
+    </main>
+
+    <!-- ═══════════ SIDEBAR DROITE (propriétés, rétractable) ═══════════ -->
+    <aside class="props collapsed" id="rightSidebar">
+      <div class="props-header" id="propsHeader" title="Réduire / agrandir le panneau">
+        <span class="props-dots" aria-hidden="true">•••</span>
+        <span class="props-header-label">PROPRIÉTÉS</span>
+        <button class="props-dock-all" id="propsDockAll" type="button" title="Rattacher tous les widgets" aria-label="Rattacher tous les widgets">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9"/><path d="m4 4 5 5"/><path d="M15 20l5-5"/><path d="m20 20-5-5"/><path d="M4 15h6v5H4zM14 4h6v6h-6z"/></svg>
+        </button>
+      </div>
+      <!-- Icônes de section affichées quand la sidebar est rétractée -->
+      <div class="rightbar-icons">
+        <button class="rightbar-icon-btn" data-section="appearance" title="Apparence"><span>●</span></button>
+        <button class="rightbar-icon-btn" data-section="textProps" title="Texte"><span>A</span></button>
+        <button class="rightbar-icon-btn" data-section="transparency" title="Transparence"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6" fill="currentColor" opacity="0.35"/></svg></button>
+        <button class="rightbar-icon-btn" data-section="alignment" title="Alignement"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="4" x2="4" y2="20"/><line x1="8" y1="7" x2="20" y2="7"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="17" x2="20" y2="17"/></svg></button>
+        <button class="rightbar-icon-btn" data-section="gradient" title="Dégradé"><span style="background:linear-gradient(135deg,#000,#fff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">◐</span></button>
+        <button class="rightbar-icon-btn" data-section="pathfinder" title="Pathfinder"><svg class="pathfinder-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/><path d="M12 6.8a6 6 0 0 1 0 10.4 6 6 0 0 1 0-10.4Z"/></svg></button>
+        <button class="rightbar-icon-btn" data-section="swatches" title="Nuancier"><span>◼</span></button>
+        <button class="rightbar-icon-btn" data-section="layers" title="Calques"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></button>
+        <button class="rightbar-icon-btn" data-section="arrange" title="Disposition"><span>☰</span></button>
+        <button class="rightbar-icon-btn" data-section="document" title="Document"><span>⧉</span></button>
+        <button class="rightbar-icon-btn" data-section="plugins" title="Plug-ins"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v4M15 3v4"/><path d="M7 7h10v5a5 5 0 0 1-10 0V7z"/><path d="M12 17v4"/></svg></button>
+        <button class="rightbar-icon-btn" data-section="widgets" title="Widgets"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg></button>
+      </div>
+
+      <div class="props-content">
+        <div class="props-section" data-section="appearance">
+          <h3>Apparence</h3>
+          <div class="field-row">
+            <label>Remplissage</label>
+            <div class="color-field">
+              <input type="color" id="fillColor" value="#4f8cff">
+              <button class="appearance-none" id="fillNone" type="button" title="Sans fond" aria-label="Sans fond" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M2 14 14 2"/></svg></button>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>Contour</label>
+            <div class="color-field">
+              <input type="color" id="strokeColor" value="#141821">
+              <button class="appearance-none" id="strokeNone" type="button" title="Sans contour" aria-label="Sans contour" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M2 14 14 2"/></svg></button>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>Épaisseur</label>
+            <input type="range" id="strokeWidth" min="0.5" max="80" step="0.5" value="2">
+            <span class="value" id="strokeWidthVal">2</span>
+          </div>
+          <div class="field-row">
+            <label>Pointillés</label>
+            <select id="strokeDash">
+              <option value="">Continu</option>
+              <option value="8 6">Tirets</option>
+              <option value="2 5">Pointillés</option>
+              <option value="10 5 2 5">Mixte</option>
+              <option value="custom">Personnalisé…</option>
+            </select>
+          </div>
+          <div class="field-row" id="strokeDashCustomRow" hidden>
+            <label>Motif</label>
+            <input type="text" id="strokeDashCustom" placeholder="ex. 6 3 2 3" spellcheck="false">
+          </div>
+          <div class="field-row">
+            <label>Extrémités</label>
+            <select id="strokeCap">
+              <option value="butt">Droit</option>
+              <option value="round">Arrondi</option>
+              <option value="square">Carré</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Jonctions</label>
+            <select id="strokeJoin">
+              <option value="miter">Angle</option>
+              <option value="round">Arrondi</option>
+              <option value="bevel">Biseau</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="shape" id="shapeProps" hidden>
+          <h3>Forme</h3>
+          <div class="field-row" id="shapeRadiusRow" hidden>
+            <label>Rayon</label>
+            <input type="range" id="shapeRadius" min="0" max="400" step="1" value="0">
+            <span class="value" id="shapeRadiusVal">0</span>
+          </div>
+          <div class="field-row" id="shapePointsRow" hidden>
+            <label>Points</label>
+            <input type="range" id="shapePoints" min="3" max="24" step="1" value="5">
+            <span class="value" id="shapePointsVal">5</span>
+          </div>
+          <div class="field-row" id="shapeInnerRow" hidden>
+            <label>Rayon int.</label>
+            <input type="range" id="shapeInner" min="5" max="95" step="1" value="50">
+            <span class="value" id="shapeInnerVal">50%</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="shapeToPath" title="Convertir la forme en chemin éditable">Convertir en chemin</button>
+          </div>
+        </div>
+
+        <div class="props-section brush-section" id="brushProps" data-section="brush" hidden>
+          <h3>Pinceau vectoriel</h3>
+          <div class="brush-presets" id="brushPresets" role="radiogroup" aria-label="Style de pinceau">
+            <button class="brush-preset active" data-brush="line" type="button"><span class="brush-sample brush-sample--line"></span><b>Ligne</b></button>
+            <button class="brush-preset" data-brush="ink" type="button"><span class="brush-sample brush-sample--ink"></span><b>Encre</b></button>
+            <button class="brush-preset" data-brush="marker" type="button"><span class="brush-sample brush-sample--marker"></span><b>Marker</b></button>
+            <button class="brush-preset" data-brush="spray" type="button"><span class="brush-sample brush-sample--spray"></span><b>Spray</b></button>
+            <button class="brush-preset" data-brush="neon" type="button"><span class="brush-sample brush-sample--neon"></span><b>Néon</b></button>
+          </div>
+          <div class="field-row">
+            <label>Taille</label>
+            <input type="range" id="brushSize" min="1" max="80" step="1" value="8">
+            <span class="value" id="brushSizeVal">8</span>
+          </div>
+          <div class="field-row">
+            <label>Lissage</label>
+            <input type="range" id="brushSmoothing" min="0" max="100" step="1" value="55">
+            <span class="value" id="brushSmoothingVal">55%</span>
+          </div>
+          <div class="field-row">
+            <label>Opacité</label>
+            <input type="range" id="brushOpacity" min="5" max="100" step="1" value="100">
+            <span class="value" id="brushOpacityVal">100%</span>
+          </div>
+          <label class="toggle-row"><span>Pression du stylet</span><input type="checkbox" id="brushPressure" checked><span class="toggle-track" aria-hidden="true"></span></label>
+        </div>
+
+        <div class="props-section" id="textProps" data-section="textProps" hidden>
+          <h3>Texte</h3>
+          <div class="field-row">
+            <label>Police</label>
+            <select id="fontFamily">
+              <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
+              <option value="Inter, system-ui, sans-serif">Inter</option>
+              <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+              <option value="'Courier New', monospace">Courier</option>
+              <option value="Impact, 'Arial Black', sans-serif">Impact</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Taille</label>
+            <input type="range" id="fontSize" min="8" max="300" step="1" value="48">
+            <span class="value" id="fontSizeVal">48</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn mini" id="textBold" title="Gras">B</button>
+            <button class="btn mini" id="textItalic" title="Italique">I</button>
+            <button class="btn mini" id="textUnderline" title="Souligné">U</button>
+            <button class="btn mini" id="textStrike" title="Barré">S̶</button>
+            <button class="btn mini" id="textCenter" title="Centrer">☰</button>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="transparency">
+          <h3>Transparence</h3>
+          <div class="field-row">
+            <label>Opacité</label>
+            <input type="range" id="opacity" min="0" max="100" step="1" value="100">
+            <span class="value" id="opacityVal">100%</span>
+          </div>
+          <div class="field-row">
+            <label>Fusion</label>
+            <select id="blendMode">
+              <option value="source-over">Normal</option>
+              <option value="multiply">Produit</option>
+              <option value="screen">Écran</option>
+              <option value="overlay">Incrustation</option>
+              <option value="darken">Obscurcir</option>
+              <option value="lighten">Éclaircir</option>
+              <option value="color-dodge">Densité +</option>
+              <option value="color-burn">Densité −</option>
+              <option value="hard-light">Lumière crue</option>
+              <option value="soft-light">Lumière douce</option>
+              <option value="difference">Différence</option>
+              <option value="exclusion">Exclusion</option>
+              <option value="hue">Teinte</option>
+              <option value="saturation">Saturation</option>
+              <option value="color">Couleur</option>
+              <option value="luminosity">Luminosité</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="alignment">
+          <h3>Alignement</h3>
+          <div class="btn-grid">
+            <button class="btn mini" id="alignLeft" title="Aligner à gauche">←</button>
+            <button class="btn mini" id="alignCenterH" title="Centrer horizontalement">—</button>
+            <button class="btn mini" id="alignRight" title="Aligner à droite">→</button>
+            <button class="btn mini" id="alignTop" title="Aligner en haut">↑</button>
+            <button class="btn mini" id="alignCenterV" title="Centrer verticalement">|</button>
+            <button class="btn mini" id="alignBottom" title="Aligner en bas">↓</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="tidyHorizontal" title="Écarts égaux horizontaux (3 objets min)">Tidy ⇔</button>
+            <button class="btn" id="tidyVertical" title="Écarts égaux verticaux (3 objets min)">Tidy ⇕</button>
+          </div>
+          <div class="field-row">
+            <label>Écart</label>
+            <input type="number" id="tidyGap" min="0" step="1" value="0" title="0 = automatique (écarts égaux)">
+            <span class="value">px</span>
+          </div>
+          <div class="group-label">Alignement plan de travail</div>
+          <div class="btn-grid">
+            <button class="btn mini" id="centerOnArtV" title="Centrer verticalement sur le plan de travail">—</button>
+            <button class="btn mini" id="centerOnArtH" title="Centrer horizontalement sur le plan de travail">|</button>
+            <button class="btn mini" id="centerOnArtBoth" title="Centrer sur le plan de travail">•</button>
+          </div>
+          <div class="group-label">Miroir</div>
+          <div class="btn-row">
+            <button class="btn" id="flipH" title="Miroir horizontal">↔ Horizontal</button>
+            <button class="btn" id="flipV" title="Miroir vertical">↕ Vertical</button>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="gradient">
+          <h3>Dégradé</h3>
+          <div class="pathfinder-grid grad-mode-grid">
+            <button class="pathfinder-btn" id="gradNone" title="Aucun dégradé">∅</button>
+            <button class="pathfinder-btn" id="gradLinear" title="Dégradé linéaire">↗</button>
+            <button class="pathfinder-btn" id="gradRadial" title="Dégradé radial">◎</button>
+          </div>
+          <div class="field-row">
+            <label>Couleur 1</label>
+            <input type="color" id="gradColor1" value="#4f8cff">
+          </div>
+          <div class="field-row">
+            <label>Couleur 2</label>
+            <input type="color" id="gradColor2" value="#ff6b6b">
+          </div>
+          <div class="field-row">
+            <label>Angle</label>
+            <input type="range" id="gradAngle" min="0" max="360" step="1" value="90">
+            <span class="value" id="gradAngleVal">90°</span>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="pathfinder">
+          <h3>Pathfinder</h3>
+          <div class="pathfinder-grid">
+            <button class="pathfinder-btn" id="pfUnion" title="Union — fusionner les formes" aria-label="Union"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" class="pathfinder-guide"/><circle cx="15" cy="12" r="6" class="pathfinder-guide"/><path class="pathfinder-result" d="M9 6a6 6 0 0 1 3 1 6 6 0 1 1 0 10A6 6 0 1 1 9 6Z"/></svg></button>
+            <button class="pathfinder-btn" id="pfSubtract" title="Soustraction — retirer la forme du dessus" aria-label="Soustraction"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" class="pathfinder-guide"/><circle cx="15" cy="12" r="6" class="pathfinder-guide"/><path class="pathfinder-result" d="M9 6a6 6 0 1 0 3 11.2 6 6 0 0 1 0-10.4A6 6 0 0 0 9 6Z"/></svg></button>
+            <button class="pathfinder-btn" id="pfIntersect" title="Intersection — garder la zone commune" aria-label="Intersection"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" class="pathfinder-guide"/><circle cx="15" cy="12" r="6" class="pathfinder-guide"/><path class="pathfinder-result" d="M12 6.8a6 6 0 0 1 0 10.4 6 6 0 0 1 0-10.4Z"/></svg></button>
+            <button class="pathfinder-btn" id="pfExclude" title="Exclusion — garder tout sauf la zone commune" aria-label="Exclusion"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" class="pathfinder-guide"/><circle cx="15" cy="12" r="6" class="pathfinder-guide"/><path class="pathfinder-result" d="M9 6a6 6 0 1 0 0 12A6 6 0 1 0 9 6ZM15 6a6 6 0 1 0 0 12A6 6 0 1 0 15 6Z"/></svg></button>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="swatches">
+          <h3>Nuancier</h3>
+          <div class="swatches-grid" id="swatchesGrid"></div>
+          <button class="btn btn-ghost wide" id="swatchAddBtn" style="margin-top:8px;">+ Ajouter la couleur</button>
+        </div>
+
+        <div class="props-section" data-section="arrange">
+          <h3>Disposition</h3>
+          <div class="btn-grid">
+            <button class="btn mini" id="bringFront" title="Premier plan">⤒</button>
+            <button class="btn mini" id="bringForward" title="Avancer">↑</button>
+            <button class="btn mini" id="sendBackward" title="Reculer">↓</button>
+            <button class="btn mini" id="sendBack" title="Arrière-plan">⤓</button>
+            <button class="btn mini" id="duplicate" title="Dupliquer (Ctrl+D)">⧉</button>
+            <button class="btn mini danger" id="deleteObj" title="Supprimer (Suppr)">🗑</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="toggleLock" title="Verrouiller / déverrouiller la sélection (Ctrl+2)">Verrouiller</button>
+            <button class="btn" id="toggleVisible" title="Masquer / afficher la sélection (Ctrl+3)">Masquer</button>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="layers">
+          <h3>Calques</h3>
+          <div class="layers-list" id="layersList"></div>
+        </div>
+
+        <div class="props-section" data-section="document">
+          <h3>Document</h3>
+          <div class="field-row">
+            <label>Fond</label>
+            <div class="color-field">
+              <input type="color" id="artboardColor" value="#ffffff">
+              <button class="chip" id="artboardNone" title="Fond transparent"></button>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>Format</label>
+            <select id="artboardSize">
+              <option value="800x600">Personnalisé</option>
+              <option value="1280x720">1280 × 720 (16:9)</option>
+              <option value="1920x1080">1920 × 1080 (Full HD)</option>
+              <option value="1080x1080">1080 × 1080 (carré)</option>
+              <option value="800x800">800 × 800 (logo)</option>
+              <option value="595x842">A4 portrait (px)</option>
+              <option value="842x595">A4 paysage (px)</option>
+              <option value="2480x3508">A4 portrait 300 dpi</option>
+              <option value="3508x2480">A4 paysage 300 dpi</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label>Grille</label>
+            <input type="number" id="gridSize" min="1" max="200" step="1" value="20">
+            <span class="value">px</span>
+          </div>
+          <label class="toggle-row"><span>Grille visible</span><input type="checkbox" id="showGrid"><span class="toggle-track" aria-hidden="true"></span></label>
+          <label class="toggle-row"><span>Règles</span><input type="checkbox" id="showRulers" checked><span class="toggle-track" aria-hidden="true"></span></label>
+          <label class="toggle-row"><span>Magnétisme</span><input type="checkbox" id="snapEnabled" checked><span class="toggle-track" aria-hidden="true"></span></label>
+          <div class="btn-row">
+            <button class="btn" id="clearGuides" title="Supprimer tous les repères">Effacer les repères</button>
+          </div>
+        </div>
+
+        <div class="props-section" data-section="plugins" id="section-plugins">
+          <h3>Plug-ins</h3>
+          <p class="section-note">Étendez Bird avec des modules. Les plug-ins actifs s’ajoutent à la barre d’outils.</p>
+          <div class="plugins-list" id="pluginsList"></div>
+          <div class="btn-row">
+            <button class="btn" id="pluginsInstall" title="Installer un fichier .plugin.js">Installer…</button>
+            <button class="btn" id="pluginsFolder" title="Ouvrir le dossier des plug-ins intégrés">Intégrés</button>
+          </div>
+          <input type="file" id="pluginFile" accept=".js,text/javascript" hidden>
+        </div>
+
+        <div class="props-section" data-section="widgets" id="section-widgets">
+          <h3>Widgets</h3>
+          <p class="section-note">Chaque panneau peut être détaché pour flotter sur le plan de travail.</p>
+          <div class="widgets-list" id="widgetsList"></div>
+          <div class="btn-row">
+            <button class="btn" id="widgetsReset" title="Replacer tous les widgets">Réinitialiser</button>
+          </div>
+        </div>
+
+        <div class="props-foot">
+          <button class="btn btn-ghost wide" id="btnClear">Tout effacer</button>
+        </div>
+      </div>
+      <button class="expand-btn" id="expandRight" title="Agrandir le panneau">«</button>
+    </aside>
+  </div>
+</div>
+
+<!-- Calque des widgets détachables -->
+<div class="widgets-layer" id="widgetsLayer"></div>
+
+<!-- Tiroir des plug-ins -->
+<div class="plugin-drawer" id="pluginDrawer" hidden>
+  <div class="plugin-drawer-card">
+    <div class="plugin-drawer-head">
+      <span id="pluginDrawerTitle">Plug-ins</span>
+      <button class="modal-close" id="pluginDrawerClose" title="Fermer" aria-label="Fermer">×</button>
+    </div>
+    <div class="plugin-drawer-body" id="pluginDrawerBody"></div>
+    <div class="plugin-drawer-foot">
+      <span class="plugin-drawer-hint" id="pluginDrawerHint"></span>
+      <button class="btn" id="pluginDrawerCancel" type="button">ANNULER</button>
+      <button class="btn btn-primary" id="pluginDrawerRun" type="button">APPLIQUER</button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay glisser-déposer -->
+<div class="drop-overlay" id="dropOverlay" hidden>
+  <div class="drop-inner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    <p>Déposez vos fichiers sur le plan de travail</p>
+    <small>SVG · PDF · AI · EPS · PNG · JPG · WEBP · GIF · WEBM</small>
+  </div>
+</div>
+
+<!-- Modal Préférences -->
+<div class="modal-overlay" id="settingsModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <span>Préférences</span>
+      <button class="modal-close" id="settingsClose" title="Fermer">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Sauvegarde automatique</div>
+          <div class="settings-desc">Le document est enregistré localement à chaque modification.</div>
+        </div>
+        <span class="settings-pill">Activée</span>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Réinitialiser le document</div>
+          <div class="settings-desc">Efface le plan de travail et la sauvegarde locale.</div>
+        </div>
+        <button class="btn btn-ghost" id="btnResetDoc">Réinitialiser</button>
+      </div>
+      <div class="settings-foot">Bird — éditeur vectoriel · v1.5</div>
+    </div>
+  </div>
+</div>
+
+<!-- Export avancé -->
+<div class="modal-overlay" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden>
+  <div class="modal-card export-card">
+    <div class="modal-head">
+      <span id="exportTitle">Exporter</span>
+      <button class="modal-close" id="exportClose" title="Fermer" aria-label="Fermer">×</button>
+    </div>
+    <div class="modal-body export-body">
+      <div class="export-formats" id="exportFormats" role="radiogroup" aria-label="Format d’export">
+        <button class="export-format active" data-format="svg" type="button"><b>SVG</b><small>Vectoriel web</small></button>
+        <button class="export-format" data-format="pdf" type="button"><b>PDF</b><small>Illustrator / print</small></button>
+        <button class="export-format" data-format="png" type="button"><b>PNG</b><small>Transparent</small></button>
+        <button class="export-format" data-format="jpg" type="button"><b>JPG</b><small>Fond blanc</small></button>
+        <button class="export-format" data-format="webp" type="button"><b>WEBP</b><small>Web léger</small></button>
+      </div>
+      <div class="export-grid">
+        <label class="export-field"><span>Portée</span>
+          <select id="exportScope">
+            <option value="document">Tout le plan de travail</option>
+            <option value="selection">Sélection uniquement</option>
+          </select>
+        </label>
+        <label class="export-field" id="exportScaleField"><span>Échelle</span>
+          <select id="exportScale">
+            <option value="1">1×</option>
+            <option value="2" selected>2×</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+          </select>
+        </label>
+        <label class="export-field" id="exportBgField"><span>Fond</span>
+          <select id="exportBackground">
+            <option value="artboard">Plan de travail</option>
+            <option value="transparent">Transparent</option>
+            <option value="white">Blanc</option>
+          </select>
+        </label>
+        <div class="export-field export-readout"><span>Taille</span><b id="exportSize">—</b></div>
+      </div>
+      <p class="export-note" id="exportNote">Le SVG conserve les objets, le texte et les dégradés.</p>
+      <div class="export-actions">
+        <button class="btn" id="exportCancel" type="button">ANNULER</button>
+        <button class="btn" id="exportClipboard" type="button" title="Copier le rendu dans le presse-papiers">COPIER</button>
+        <button class="btn btn-primary" id="exportRun" type="button">EXPORTER</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Création vectorielle IA -->
+<div class="modal-overlay ai-overlay" id="aiModal" role="dialog" aria-modal="true" aria-labelledby="aiTitle" hidden>
+  <div class="modal-card ai-modal-card">
+    <div class="modal-head ai-modal-head">
+      <div>
+        <span class="ai-kicker">ATELIER VECTORIEL</span>
+        <h2 id="aiTitle">Créer avec l’IA</h2>
+      </div>
+      <button class="modal-close" id="aiClose" title="Fermer" aria-label="Fermer">×</button>
+    </div>
+    <form class="ai-form" id="aiForm">
+      <div class="ai-mode" role="radiogroup" aria-label="Type de génération">
+        <label><input type="radio" name="aiMode" value="text" checked><span><b>SVG par code</b><small>Modèles gratuits disponibles</small></span></label>
+        <label><input type="radio" name="aiMode" value="native"><span><b>SVG natif</b><small>Recraft via OpenRouter</small></span></label>
+      </div>
+      <label class="ai-field ai-prompt-field" for="aiPrompt">
+        <span>Votre idée</span>
+        <textarea id="aiPrompt" rows="5" maxlength="2400" required placeholder="Une affiche vectorielle Bauhaus, formes géométriques rouges et noires, composition asymétrique…"></textarea>
+      </label>
+      <div class="ai-grid">
+        <label class="ai-field" for="aiModel"><span>Modèle</span><select id="aiModel"></select></label>
+        <label class="ai-field" for="aiAspect"><span>Format</span><select id="aiAspect"><option value="auto">Plan de travail</option><option value="1:1">Carré 1:1</option><option value="4:3">Paysage 4:3</option><option value="3:4">Portrait 3:4</option><option value="16:9">Large 16:9</option><option value="9:16">Mobile 9:16</option></select></label>
+        <label class="ai-field" for="aiStyle"><span>Direction</span><select id="aiStyle"><option value="">Libre</option><option value="minimal geometric">Géométrique</option><option value="bold editorial vector">Éditorial</option><option value="flat icon design">Icône</option><option value="expressive hand-drawn vector">Illustré</option><option value="technical line art">Linéaire</option></select></label>
+        <label class="ai-field" for="aiInsert"><span>Placement</span><select id="aiInsert"><option value="insert">Ajouter au document</option><option value="replace">Remplacer la sélection</option></select></label>
+      </div>
+      <div class="ai-access">
+        <label class="ai-field" for="aiProvider"><span>Fournisseur</span>
+          <select id="aiProvider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </label>
+        <label class="ai-field" for="aiApiKey"><span id="aiKeyLabel">Clé OpenRouter</span><input id="aiApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…"></label>
+        <button class="btn btn-icon" id="aiRefreshModels" type="button" title="Actualiser les modèles OpenRouter" aria-label="Actualiser les modèles"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 6V2m0 0h-4m4 0-2.3 2.3A6 6 0 1 0 16 12"/></svg></button>
+      </div>
+      <p class="ai-security">La clé reste dans cet onglet et n’est jamais incluse dans le fichier projet.</p>
+      <div class="ai-status" id="aiStatus" role="status" aria-live="polite"></div>
+      <div class="ai-actions">
+        <button class="btn" id="aiCancel" type="button">ANNULER</button>
+        <button class="btn btn-primary ai-generate" id="aiGenerate" type="submit"><span>GÉNÉRER LE VECTEUR</span><span class="ai-spinner" aria-hidden="true"></span></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="canvas-context-menu" id="canvasContextMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-context-action="edit-path">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15.5 5 11l8.5-8.5 4 4L9 15l-5 1Z"/><path d="m11.5 4.5 4 4"/></svg>
+    <span>Modifier le tracé</span>
+  </button>
+  <button type="button" role="menuitem" data-context-action="group">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="9" height="9" rx="1"/><rect x="8.5" y="8.5" width="9" height="9" rx="1"/></svg>
+    <span>Grouper</span><kbd>Ctrl G</kbd>
+  </button>
+  <button type="button" role="menuitem" data-context-action="ungroup">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1"/><rect x="11" y="11" width="6.5" height="6.5" rx="1"/><path d="m10 6 4-4m0 0h-3m3 0v3M10 14l-4 4m0 0h3m-3 0v-3"/></svg>
+    <span>Dégrouper</span><kbd>Ctrl Shift G</kbd>
+  </button>
+  <div class="canvas-context-menu-sep" role="separator"></div>
+  <button type="button" role="menuitem" data-context-action="bring-front">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="9" height="9" rx="1" opacity="0.35"/><rect x="8" y="8" width="9" height="9" rx="1"/></svg>
+    <span>Premier plan</span>
+  </button>
+  <button type="button" role="menuitem" data-context-action="send-back">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="8" y="8" width="9" height="9" rx="1" opacity="0.35"/><rect x="3" y="3" width="9" height="9" rx="1"/></svg>
+    <span>Arrière-plan</span>
+  </button>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/fabric.min.js"></script>
+<script src="js/paper-full.min.js"></script>
+<script src="js/io.js"></script>
+<script src="js/widgets.js"></script>
+<script src="js/plugins.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout
+  title="Documentation Bird — import PDF/AI, export SVG/PDF, API"
+  description="Documentation de Bird : démarrage, raccourcis, imports PDF/AI/EPS, exports SVG/PDF, API JavaScript, version Astro et moteur Rust."
+>
+  <div class="docs">
+    <nav class="docs-nav" aria-label="Sommaire">
+      <span class="group">Démarrer</span>
+      <a href="#demarrage">Démarrage</a>
+      <a href="#raccourcis">Raccourcis</a>
+      <span class="group">Formats</span>
+      <a href="#import">Import</a>
+      <a href="#export">Export</a>
+      <a href="#limites">Limites connues</a>
+      <span class="group">Intégration</span>
+      <a href="#api">API JavaScript</a>
+      <a href="#astro">Version Astro</a>
+      <a href="#rust">Version Rust</a>
+    </nav>
+
+    <article class="docs-body">
+      <h1>Documentation</h1>
+      <p>
+        Bird est un éditeur vectoriel local-first. Le document est conservé dans le navigateur
+        (localStorage puis IndexedDB) et n’est envoyé nulle part, sauf si vous utilisez
+        volontairement l’atelier IA avec votre propre clé OpenRouter.
+      </p>
+
+      <h2 id="demarrage">Démarrage</h2>
+      <h3>Version web autonome</h3>
+      <p>Ouvrez <code>index.html</code> dans un navigateur moderne. Aucun serveur n’est requis pour l’édition, mais servir le dossier en HTTP est recommandé (Web Workers PDF, service worker, presse-papiers).</p>
+      <pre class="code"><code>{`npx serve bird
+# http://localhost:3000`}</code></pre>
+
+      <h3>Version Astro</h3>
+      <pre class="code"><code>{`cd bird/astro
+npm install
+npm run dev        # http://localhost:4321
+npm run build      # sortie dist/
+npm start          # serveur Node autonome`}</code></pre>
+
+      <h2 id="raccourcis">Raccourcis</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Touche</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><code>V</code> / <code>P</code> / <code>N</code> / <code>B</code> / <code>I</code></td><td>Sélection / Plume / Crayon / Pinceau / Pipette</td></tr>
+            <tr><td><code>R</code> / <code>E</code> / <code>L</code> / <code>T</code></td><td>Rectangle / Ellipse / Ligne / Texte</td></tr>
+            <tr><td><code>H</code> ou <code>Espace</code></td><td>Main (déplacer la vue)</td></tr>
+            <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Shift+Z</code></td><td>Annuler / Rétablir</td></tr>
+            <tr><td><code>Ctrl+C</code> / <code>Ctrl+X</code> / <code>Ctrl+V</code></td><td>Copier / Couper / Coller (interne + SVG système)</td></tr>
+            <tr><td><code>Ctrl+D</code> / <code>Ctrl+G</code> / <code>Ctrl+Shift+G</code></td><td>Dupliquer / Grouper / Dégrouper</td></tr>
+            <tr><td><code>Ctrl+2</code> / <code>Ctrl+3</code></td><td>Verrouiller / Masquer la sélection</td></tr>
+            <tr><td><code>Ctrl+0</code> / <code>Maj+1</code> / <code>Maj+2</code></td><td>Ajuster à l’écran / Ajuster / Zoom sélection</td></tr>
+            <tr><td><code>Suppr</code></td><td>Supprimer la sélection</td></tr>
+            <tr><td><code>Flèches</code> / <code>Maj+Flèches</code></td><td>Déplacer de 1 px / 10 px</td></tr>
+            <tr><td><code>Échap</code> / <code>Entrée</code></td><td>Terminer ou annuler un tracé</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="import">Import</h2>
+      <p>La détection se fait par <b>signature binaire</b>, pas uniquement par extension. Un <code>.ai</code> commençant par <code>%PDF-</code> est traité comme un PDF ; un <code>.ai</code> PostScript passe par l’interpréteur EPS.</p>
+      <ul>
+        <li><b>SVG / SVGZ</b> : nettoyage des scripts, <code>foreignObject</code>, gestionnaires <code>on*</code> et références externes, puis import Fabric.</li>
+        <li><b>PDF</b> : pdf.js reconstruit les chemins, clips, couleurs (RVB, gris, CMJN), opacités, images et textes. Seule la première page est importée.</li>
+        <li><b>Adobe Illustrator</b> : les fichiers modernes sont des PDF ; les anciens sont du PostScript.</li>
+        <li><b>EPS</b> : interpréteur PostScript Adobe Illustrator niveau 2 (moveto, lineto, curveto, v, y, arcs, clips, couleurs, gsave/grestore).</li>
+        <li><b>Images</b> : PNG, JPG, WebP, GIF, BMP, AVIF. <b>Vidéos</b> : première frame.</li>
+        <li><b>Presse-papiers</b> : collez un SVG ou une image directement sur le plan de travail.</li>
+        <li><b>Projets</b> : <code>.plume</code>, <code>.bird</code> ou JSON Fabric brut (migration automatique).</li>
+      </ul>
+
+      <h2 id="export">Export</h2>
+      <ul>
+        <li><b>SVG</b> : document entier ou sélection, fond plan de travail / transparent / blanc.</li>
+        <li><b>PDF vectoriel</b> : SVG → svg2pdf → jsPDF. Compatible Illustrator et imprimeurs.</li>
+        <li><b>PNG / JPG / WEBP</b> : échelle 1× à 4×, transparence (PNG/WEBP) ou fond blanc (JPG).</li>
+        <li><b>Copie</b> : SVG ou image dans le presse-papiers système.</li>
+        <li><b>Projet</b> : <code>.plume</code> v3 (artboard, calques, guides, grille, objets Fabric).</li>
+      </ul>
+
+      <h2 id="limites">Limites connues</h2>
+      <ul>
+        <li>PDF : première page uniquement ; les polices cassées ou sans table Unicode ne peuvent pas être reconstruites en texte éditable.</li>
+        <li>PDF exporté : les polices non standard sont remplacées par Helvetica, Times ou Courier. Les dégradés complexes sont approximés.</li>
+        <li>Les scripts et contenus actifs des SVG importés sont supprimés par sécurité.</li>
+        <li>Le format <code>.ai</code> n’est jamais écrit : utilisez le PDF vectoriel, que Illustrator ouvre nativement.</li>
+      </ul>
+
+      <h2 id="api">API JavaScript</h2>
+      <p>L’application expose <code>window.Bird</code> après initialisation :</p>
+      <pre class="code"><code>{`Bird.version
+Bird.document.new()
+Bird.document.payload()
+Bird.document.load(payload)
+Bird.document.open(file)          // File API, tous formats
+Bird.io.importSVG(svgText)
+Bird.io.importPDF(arrayBuffer)   // { svg, width, height, pages }
+Bird.io.importEPS(arrayBuffer)   // { group, parsed }
+Bird.export({
+  format: 'svg' | 'pdf' | 'png' | 'jpg' | 'webp',
+  scope: 'document' | 'selection',
+  background: 'artboard' | 'transparent' | 'white',
+  scale: 1 | 2 | 3 | 4,
+  returnBlob: true
+})
+Bird.exportSVG({ background: 'transparent' })
+Bird.zoom.selection()
+Bird.selection.lock()
+Bird.selection.hide()`}</code></pre>
+
+      <h2 id="astro">Version Astro</h2>
+      <p>
+        Le dossier <code>bird/astro</code> est un vrai projet Astro 7 avec adaptateur Node.
+        Le DOM de l’éditeur est généré depuis <code>../index.html</code> (source unique) par
+        <code>scripts/sync-engine.mjs</code>, qui copie aussi <code>js/</code>, <code>css/</code> et
+        <code>icons/</code> dans <code>public/assets/bird/</code>.
+      </p>
+      <ul>
+        <li><code>/</code> : page marketing.</li>
+        <li><code>/editor</code> : éditeur complet.</li>
+        <li><code>/docs</code> : cette documentation.</li>
+        <li><code>/api/health</code> : état du service.</li>
+        <li><code>/api/ai</code> : proxy OpenRouter optionnel (<code>OPENROUTER_API_KEY</code> ou en-tête <code>x-openrouter-key</code>).</li>
+        <li><code>/sitemap.xml</code> : sitemap dynamique.</li>
+      </ul>
+      <pre class="code"><code>{`# Développement
+cd bird/astro
+npm run dev
+
+# Production
+npm run build
+OPENROUTER_API_KEY=sk-or-... npm start`}</code></pre>
+
+      <h2 id="rust">Version Rust</h2>
+      <p>
+        Le dossier <code>bird/rust</code> contient un workspace Cargo sans dépendance lourde côté
+        cœur : modèle de document Bird, export SVG/PDF/EPS, inspection et validation de fichiers
+        <code>.plume</code>, serveur local pour l’éditeur.
+      </p>
+      <pre class="code"><code>{`cd bird/rust
+
+# Windows : détecte MSVC ou MinGW-W64, teste et compile la CLI
+./scripts/build.ps1
+
+# Unix
+./scripts/build.sh
+
+# Utilisation
+cargo run -p bird-cli -- inspect examples/sample.plume
+cargo run -p bird-cli -- to-svg examples/sample.plume out.svg
+cargo run -p bird-cli -- to-pdf examples/sample.plume out.pdf
+cargo run -p bird-cli -- to-eps examples/sample.plume out.eps
+cargo run -p bird-cli -- serve .. --port 8787`}</code></pre>
+      <p class="muted">Voir <code>bird/rust/README.md</code> pour la grammaire des commandes et les conversions supportées.</p>
+    </article>
+  </div>
+</Layout>

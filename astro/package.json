@@ -1,0 +1,22 @@
+{
+  "name": "bird-astro",
+  "version": "1.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Bird — version Astro du studio vectoriel local-first",
+  "scripts": {
+    "sync": "node scripts/sync-engine.mjs",
+    "dev": "node scripts/sync-engine.mjs && astro dev",
+    "build": "node scripts/sync-engine.mjs && astro build",
+    "preview": "astro preview",
+    "start": "node ./dist/server/entry.mjs",
+    "postinstall": "node scripts/sync-engine.mjs"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.8",
+    "astro": "^7.4.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

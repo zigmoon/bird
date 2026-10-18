@@ -1,0 +1,25 @@
+# Dépendances et artefacts de build
+**/node_modules/
+**/dist/
+**/target/
+**/.astro/
+**/.vite/
+**/coverage/
+**/*.log
+**/.DS_Store
+
+# Fichiers d'environnement
+.env
+.env.*
+!.env.example
+
+# Copies générées par Astro (`npm run sync`) — la source de vérité reste
+# js/, css/, icons/, plugins/ et index.html à la racine.
+astro/public/assets/bird/
+astro/src/generated/
+
+# Sorties d'export locales
+*.pdf
+*.eps
+*.svg.out
+!icons/*.svg

@@ -1,0 +1,16 @@
+{
+  "app": "Bird",
+  "format": "bird-vector-project",
+  "version": 3,
+  "artboard": { "w": 640, "h": 480, "color": "#ffffff" },
+  "view": { "showGrid": true, "gridSize": 20, "showRulers": true, "snapEnabled": true, "guides": [{ "axis": "x", "pos": 320 }] },
+  "json": {
+    "objects": [
+      { "type": "rect", "left": 40, "top": 40, "width": 200, "height": 120, "rx": 18, "fill": "#1677ff", "stroke": "#0b2d6b", "strokeWidth": 4 },
+      { "type": "ellipse", "left": 300, "top": 60, "width": 140, "height": 90, "fill": "#ff6b6b" },
+      { "type": "polygon", "left": 360, "top": 260, "width": 160, "height": 160, "fill": "#111111", "points": [ { "x": 0, "y": -80 }, { "x": 76, "y": 40 }, { "x": -76, "y": 40 } ] },
+      { "type": "i-text", "left": 50, "top": 300, "width": 300, "height": 60, "text": "Bird Rust", "fontSize": 44, "fontFamily": "Helvetica", "fill": "#111111" }
+    ]
+  },
+  "savedAt": 1790000000000
+}

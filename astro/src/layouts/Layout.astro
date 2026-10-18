@@ -1,0 +1,92 @@
+---
+import '../styles/site.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+}
+
+const {
+  title = 'Bird — éditeur vectoriel gratuit, import PDF/AI et export SVG/PDF',
+  description = 'Éditeur vectoriel local-first : Bézier, calques, règles, Pathfinder, import SVG/PDF/AI/EPS et export SVG ou PDF vectoriel. Sans compte.',
+  noindex = false
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site || 'https://app.zigmoon.com');
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Bird',
+  applicationCategory: 'DesignApplication',
+  operatingSystem: 'Web',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+  description,
+  url: canonical.toString(),
+  author: { '@type': 'Person', name: 'Zigmoon' }
+};
+---
+<!doctype html>
+<html lang="fr" translate="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="google" content="notranslate" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="application-name" content="Bird" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bird" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL('/favicon.svg', canonical)} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <slot name="head" />
+  </head>
+  <body class="site">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Bird, accueil">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/></svg>
+        <span>BIRD</span>
+      </a>
+      <nav class="site-nav" aria-label="Navigation principale">
+        <a href="/editor">Éditeur</a>
+        <a href="/docs">Documentation</a>
+        <a href="/docs#astro">Astro</a>
+        <a href="/docs#rust">Rust</a>
+      </nav>
+      <a class="cta cta--small" href="/editor">Ouvrir l’éditeur</a>
+    </header>
+
+    <main class="site-main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <strong>BIRD</strong> — éditeur vectoriel local-first.
+        <span class="muted">Vos documents restent dans votre navigateur.</span>
+      </div>
+      <div class="footer-links">
+        <a href="/editor">Éditeur</a>
+        <a href="/docs">Documentation</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </div>
+    </footer>
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    </script>
+  </body>
+</html>
