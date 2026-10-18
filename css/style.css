@@ -489,7 +489,7 @@ button { cursor: pointer; }
   width: clamp(180px, 26vw, 300px);
   height: auto;
   margin: 0 auto 18px;
-  opacity: 0.9;
+  opacity: 1;             /* le gris clair est déjà dans le fichier SVG */
   -webkit-user-drag: none;
 }
 .empty-hint b { font-weight: 600; font-size: 12px; letter-spacing: 1.5px; }
@@ -530,7 +530,8 @@ kbd {
   user-select: none;
 }
 .props-header:hover { background: #fafafa; }
-.props-dots { font-size: 13px; letter-spacing: 2px; opacity: 0.35; line-height: 1; }
+.props-dots { font-size: 13px; letter-spacing: 2px; opacity: 0.55; line-height: 1; color: #1a1a1a; }
+.props-header:hover .props-dots { opacity: 1; }
 .props-header-label {
   font-size: 8px; letter-spacing: .16em; text-transform: uppercase;
   color: #999; flex: 1 1 auto; min-width: 0;
@@ -547,22 +548,31 @@ kbd {
 .props.collapsed .props-header { justify-content: center; padding: 0; }
 .props.collapsed .props-header-label,
 .props.collapsed .props-dock-all { display: none; }
-.props.collapsed .props-dots { display: none; }
+/* Rétracté, le panneau n'a plus qu'une poignée : les trois points. Ils doivent
+   rester visibles ET lisibles, c'est le seul moyen de le rouvrir. */
+.props.collapsed .props-dots { display: block; opacity: .75; letter-spacing: 1px; }
+.props.collapsed .props-header:hover .props-dots { opacity: 1; }
 
 /* Icônes de section visibles quand rétractée */
 .rightbar-icons {
   display: none;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 4px;
+  gap: 2px;
+  padding: 6px 4px;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.rightbar-icons::-webkit-scrollbar { width: 0; height: 0; }
 .rightbar-icon-btn {
   width: 100%;
-  height: 40px;
+  height: 34px;
+  flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   background: transparent; border: none; border-radius: 4px;
   color: #1a1a1a; opacity: 0.6;
-  font-size: 18px; cursor: pointer;
+  font-size: 17px; cursor: pointer;
   transition: opacity .15s, background .15s;
 }
 .rightbar-icon-btn:hover { opacity: 1; background: #f5f5f5; }
@@ -1270,3 +1280,96 @@ input[type="range"]::-webkit-slider-thumb {
   .topbar-center .btn-square { width: 28px; height: 28px; }
   .zoom-readout { min-width: 40px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PLANS DE TRAVAIL (pages)
+   ═══════════════════════════════════════════════════════════════ */
+.pages-list {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 240px; overflow-y: auto;
+  border: 1px solid #ececec; border-radius: 4px; padding: 4px;
+}
+.page-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 6px; border-radius: 3px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.page-row:hover { background: #f7f7f7; }
+.page-row.is-active { background: #f0f5ff; border-color: #d6e4ff; }
+.page-num {
+  flex: 0 0 auto; width: 17px; height: 17px; border-radius: 3px;
+  background: #f0f0f0; color: #666;
+  font-size: 9px; display: flex; align-items: center; justify-content: center;
+}
+.page-row.is-active .page-num { background: #1677ff; color: #fff; }
+.page-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.page-name { font-size: 11px; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.page-name[contenteditable="true"] { outline: 1px solid #1677ff; border-radius: 2px; padding: 0 2px; }
+.page-meta { font-size: 8.5px; color: #9a9a9a; font-family: 'IBM Plex Mono', monospace; }
+.page-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
+.page-row:hover .page-tools, .page-row.is-active .page-tools { opacity: 1; }
+.page-tool {
+  width: 16px; height: 16px; padding: 0; border: none; border-radius: 2px;
+  background: transparent; color: #888; font-size: 10px; line-height: 1; cursor: pointer;
+}
+.page-tool:hover:not(:disabled) { background: #e9e9e9; color: #1a1a1a; }
+.page-tool:disabled { opacity: .25; cursor: default; }
+.page-del:hover:not(:disabled) { background: #fdecec; color: #c0392b; }
+
+/* Sélecteur flottant : visible dès deux plans */
+.page-switcher {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 1px;
+  background: rgba(255,255,255,.96);
+  border: 1px solid #e4e4e4; border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.07);
+  padding: 2px; z-index: 26;
+  backdrop-filter: saturate(1.2) blur(2px);
+}
+.page-nav {
+  width: 22px; height: 22px; padding: 0; border: none; border-radius: 999px;
+  background: transparent; color: #555; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.page-nav:hover:not(:disabled) { background: #f1f1f1; color: #1a1a1a; }
+.page-nav:disabled { opacity: .3; cursor: default; }
+.page-nav svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.page-current {
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: 1px 9px; border: none; background: transparent; cursor: pointer;
+  min-width: 74px;
+}
+.page-current span {
+  font-size: 10px; color: #1a1a1a; max-width: 130px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.page-current small { font-size: 8px; color: #9a9a9a; font-family: 'IBM Plex Mono', monospace; }
+.stage.has-rulers .page-switcher { bottom: 12px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   MODALE D'IMPORT PDF MULTI-PAGES
+   ═══════════════════════════════════════════════════════════════ */
+.pdf-pages-card { width: 440px; max-width: calc(100vw - 24px); }
+.pdf-pages-body { display: flex; flex-direction: column; gap: 8px; }
+.pdf-pages-lead { margin: 0 0 4px; font-size: 11px; color: #1a1a1a; }
+.pdf-page-option {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 9px; border: 1px solid #e8e8e8; border-radius: 4px;
+  cursor: pointer; font-size: 11px;
+}
+.pdf-page-option:hover { background: #fafafa; }
+.pdf-page-option input { margin-top: 2px; accent-color: #1677ff; }
+.pdf-page-option span { display: flex; flex-direction: column; gap: 1px; }
+.pdf-page-option b { font-weight: 500; }
+.pdf-page-option small { color: #8a8a8a; font-size: 9.5px; }
+.pdf-page-pick {
+  display: flex; align-items: center; gap: 7px; padding: 0 9px 4px 33px;
+  font-size: 10px; color: #666;
+}
+.pdf-page-pick input {
+  width: 62px; padding: 3px 5px; font-size: 11px;
+  border: 1px solid #e2e2e2; border-radius: 3px; font-family: inherit;
+}
+.pdf-pages-total { font-family: 'IBM Plex Mono', monospace; color: #9a9a9a; }
+.pdf-pages-note { margin: 4px 0 0; font-size: 9px; color: #9a9a9a; font-family: 'IBM Plex Mono', monospace; }
+.pdf-pages-actions { padding: 0 14px 14px; }

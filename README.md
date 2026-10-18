@@ -25,7 +25,17 @@ Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox
 
 ---
 
-## Nouveautés v1.6
+## Nouveautés v1.7
+
+| Domaine | Ce qui change |
+|---|---|
+| **Plans de travail** | Un document contient désormais **plusieurs plans** (comme les artboards d’Illustrator) : panneau dédié, sélecteur flottant sur le plan de travail, `Ctrl+Page↑` / `Ctrl+Page↓`, format indépendant par plan, historique **par plan**. |
+| **Import PDF multi-pages** | Un PDF de N pages propose trois choix : première page, page précise, ou **toutes les pages → un plan par page** au format exact de chaque page, contenu à 1:1. |
+| **Export PDF multi-plans** | `Tous les plans de travail (PDF)` : un seul PDF, une page par plan, chacune à son format. |
+| **Icônes** | L’aperçu du plan de travail vide utilise le logo en **gris clair** (marque discrète, pas un aplat noir). |
+| **Panneau rétracté** | Le rail d’icônes passe de 13 à 7 entrées utiles ; les `•••` restent visibles pour rouvrir le panneau. |
+
+### v1.6
 
 | Domaine | Ce qui change |
 |---|---|
@@ -214,10 +224,44 @@ Tout SVG généré passe par le **même nettoyeur** que l’import : scripts, `f
 
 Le presse-papiers système est aussi pris en charge : collez un SVG ou une image directement sur le plan de travail.
 
+### PDF multi-pages
+
+À l’import d’un PDF de plus d’une page, Bird demande quoi faire :
+
+| Choix | Résultat |
+|---|---|
+| **Première page** | comportement historique : un seul plan de travail |
+| **Une page précise** | un plan, la page demandée, contenu centré comme un import classique |
+| **Toutes les pages** | **un plan de travail par page**, au format exact de la page PDF (595 × 842, 842 × 595, 300 × 300…), contenu placé à **1:1** et non réduit |
+
+Les pages importées sont ajoutées à la suite des plans existants : rien n’est écrasé.
+
+## Plans de travail
+
+Un document contient plusieurs plans de travail, chacun avec son format, son fond et son contenu.
+
+- **Panneau *Plans de travail*** : liste numérotée, nom éditable (double-clic), dimensions, nombre d’objets, monter/descendre, supprimer (confirmation si le plan n’est pas vide).
+- **Sélecteur flottant** en bas du plan de travail, visible dès deux plans : `‹ Plan › ` + compteur, cliquable pour ouvrir le panneau.
+- **Raccourcis** `Ctrl+Page↑` / `Ctrl+Page↓`.
+- **Historique isolé par plan** : annuler sur le plan A ne touche pas le plan B. Les piles sont mémorisées au changement de plan.
+- **Persistance** : le projet `.plume` enregistre tous les plans (`pages[]` + `activePage`). Un ancien projet mono-plan s’ouvre comme un document à un seul plan.
+
+```js
+Bird.pages.list()                  // [{ index, id, name, width, height, active }]
+Bird.pages.count()
+Bird.pages.go(2)                   // afficher le 3e plan
+Bird.pages.add('Couverture')       // nouveau plan vide
+Bird.pages.duplicate()             // copie du plan actif, juste après lui
+Bird.pages.rename(1, 'Page de garde')
+Bird.pages.remove(2)
+Bird.pages.move(3, -1)
+```
+
 ## Export
 
 - **SVG** : document ou sélection, fond plan de travail / transparent / blanc.
 - **PDF vectoriel** : via `svg2pdf` + jsPDF, compatible Illustrator et imprimeurs.
+- **PDF multi-plans** : portée *Tous les plans de travail* → un PDF, une page par plan, chacune à son format.
 - **PNG** transparent, **JPG** fond blanc, **WEBP**, avec échelle 1× à 4×.
 - **Copie dans le presse-papiers** (SVG ou image).
 - **Projet `.plume`** : JSON versionné, migration automatique des anciens projets.
@@ -256,6 +300,7 @@ Le presse-papiers système est aussi pris en charge : collez un SVG ou une image
 | `Ctrl+'` | Grille |
 | `Ctrl+;` | Magnétisme |
 | `Ctrl+K` | Plug-ins |
+| `Ctrl+Page↑` / `Ctrl+Page↓` | Plan de travail précédent / suivant |
 | `Suppr` | Supprimer |
 | `Flèches` / `Maj+Flèches` | Déplacer de 1 px / 10 px |
 | `Échap` / `Entrée` | Terminer / annuler un tracé (ou `Échap` pendant un glissement de repère) |
@@ -269,7 +314,8 @@ bird/
 ├── index.html                 interface (DOM stable, réutilisé par Astro)
 ├── css/style.css              design : IBM Plex Mono, noir & blanc, grille 4 px
 ├── icons/
-│   ├── bird-logo.svg          logo complet (5 oiseaux) — splash + aperçu
+│   ├── bird-logo.svg          logo complet (5 oiseaux) — splash
+│   ├── bird-logo-gray.svg     logo complet en gris clair — aperçu du plan vide
 │   ├── bird-mark.svg          marque seule — barre haute
 │   ├── bird-mark-white.svg    marque inversée — panneaux sombres
 │   ├── favicon.svg            favicon (carré arrondi + marque centrée)
@@ -297,17 +343,24 @@ bird/
 ### API d’intégration
 
 ```js
-Bird.version                         // '1.6.0'
+Bird.version                         // '1.7.0'
 Bird.document.new()                  // nouveau document
-Bird.document.payload()              // projet sérialisé
+Bird.document.payload()              // projet sérialisé (tous les plans)
 Bird.document.load(payload)          // ouvre un projet
 Bird.document.open(file)             // importe un File (tous formats)
-Bird.io.importPDF(arrayBuffer)       // → { svg, width, height, pages }
+Bird.io.importPDF(arrayBuffer)       // → { svg, width, height, pages, page }
+Bird.io.pdfPageCount(arrayBuffer)    // → { pages, sizes:[{ index, width, height }] }
+Bird.io.svgPagesToPDF([{ svg, width, height }])  // → PDF multi-pages
 Bird.io.importEPS(arrayBuffer)       // → groupe Fabric
 Bird.io.importSVG(svgText)
 Bird.export({ format:'pdf', scope:'document', background:'artboard', returnBlob:true })
+Bird.export({ format:'pdf', scope:'pages', returnBlob:true })   // une page par plan
 Bird.exportSVG({ background:'transparent' })
 Bird.zoom.selection()
+
+Bird.pages.count()                   // plans de travail
+Bird.pages.go(1)
+Bird.pages.add('Plan 3')
 
 Bird.view.rulers(true)               // règles / grille / magnétisme
 Bird.view.grid(false)
@@ -370,10 +423,18 @@ Les préférences d’interface (widgets détachés, plug-ins actifs, réglages 
 
 ## Feuille de route
 
-- [ ] Édition de nœuds multiples (sélection rectangulaire d’ancres)
-- [ ] Bibliothèque de symboles et de styles partagés
-- [ ] Plug-ins import/export (format métier)
-- [ ] Mode multipage et planches
-- [ ] Signature de police PDF embarquée
+- [x] Multi-plans de travail / pages
+- [x] Import PDF multi-pages avec sélecteur de page
+- [x] Export PDF multi-plans
+- [ ] Texte PDF vraiment vectoriel (embarquement de polices ou conversion en courbes)
+- [ ] Export PDF/X-1a, CMJN et profils ICC
+- [ ] Dégradés PDF réels (shadings axiaux/radiaux)
+- [ ] Contour de trait, décalage de tracé, simplification, symboles, blend tool
+- [ ] Historique incrémental (alléger les instantanés avec images)
+- [ ] Rendu WebGL / OffscreenCanvas pour les gros documents
+- [ ] Version desktop Tauri s’appuyant sur `bird-core`
+- [ ] Tests Playwright de non-régression visuelle
+- [ ] Collaboration local-first (CRDT) et gestion de versions
+- [ ] i18n et accessibilité complète
 
 © Zigmoon — Bird

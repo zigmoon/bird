@@ -36,7 +36,7 @@
     </div>
     <div class="splash-info">
       <div class="splash-subtitle">LOCAL-FIRST VECTOR STUDIO</div>
-      <div class="splash-version">v1.6 — PDF · AI · EPS · SVG · PDF/X</div>
+      <div class="splash-version">v1.7 — Multi-plans · PDF multipage · PDF/X</div>
       <div class="splash-section">
         <div class="splash-label">Créateurs</div>
         <div class="splash-text">Simon Dupont-Gellert</div>
@@ -237,8 +237,21 @@
       <div class="ruler-corner" id="rulerCorner" title="Règles : glissez pour créer un repère"></div>
       <div class="guides-layer" id="guidesLayer"></div>
       <div class="guide-temp" id="guideTemp" hidden></div>
+      <!-- Sélecteur de plan de travail : toujours à portée, jamais devant le dessin -->
+      <div class="page-switcher" id="pageSwitcher" hidden>
+        <button class="page-nav" id="pagePrev" type="button" title="Plan précédent (Ctrl+Page↑)" aria-label="Plan précédent">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+        <button class="page-current" id="pageCurrent" type="button" title="Tous les plans de travail">
+          <span id="pageCurrentLabel">Plan 1</span>
+          <small id="pageCurrentCount">1 / 1</small>
+        </button>
+        <button class="page-nav" id="pageNext" type="button" title="Plan suivant (Ctrl+Page↓)" aria-label="Plan suivant">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+      </div>
       <div class="empty-hint" id="emptyHint">
-        <img class="empty-logo" src="icons/bird-logo.svg" alt="Bird" draggable="false">
+        <img class="empty-logo" src="icons/bird-logo-gray.svg" alt="" aria-hidden="true" draggable="false">
         <p class="muted">Choisissez un outil et dessinez,<br>ou déposez un fichier — SVG, PDF, AI, EPS.</p>
         <p class="kbd">Plume <kbd>P</kbd> · Sélection <kbd>V</kbd> · Texte <kbd>T</kbd> · Plug-ins <kbd>Ctrl</kbd> <kbd>K</kbd><br>
         Zoom molette · Espace = déplacer · <kbd>Ctrl</kbd>+<kbd>R</kbd> règles</p>
@@ -254,20 +267,17 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9"/><path d="m4 4 5 5"/><path d="M15 20l5-5"/><path d="m20 20-5-5"/><path d="M4 15h6v5H4zM14 4h6v6h-6z"/></svg>
         </button>
       </div>
-      <!-- Icônes de section affichées quand la sidebar est rétractée -->
+      <!-- Rail d'icônes : seulement les panneaux réellement consultés en
+           cours de dessin. Les autres restent accessibles en ouvrant le
+           panneau (•••) — un rail de 13 icônes débordait de l'écran. -->
       <div class="rightbar-icons">
+        <button class="rightbar-icon-btn" data-section="layers" title="Calques"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></button>
         <button class="rightbar-icon-btn" data-section="appearance" title="Apparence"><span>●</span></button>
         <button class="rightbar-icon-btn" data-section="textProps" title="Texte"><span>A</span></button>
-        <button class="rightbar-icon-btn" data-section="transparency" title="Transparence"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="15" r="6" fill="currentColor" opacity="0.35"/></svg></button>
         <button class="rightbar-icon-btn" data-section="alignment" title="Alignement"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="4" x2="4" y2="20"/><line x1="8" y1="7" x2="20" y2="7"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="17" x2="20" y2="17"/></svg></button>
-        <button class="rightbar-icon-btn" data-section="gradient" title="Dégradé"><span style="background:linear-gradient(135deg,#000,#fff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">◐</span></button>
         <button class="rightbar-icon-btn" data-section="pathfinder" title="Pathfinder"><svg class="pathfinder-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/><path d="M12 6.8a6 6 0 0 1 0 10.4 6 6 0 0 1 0-10.4Z"/></svg></button>
-        <button class="rightbar-icon-btn" data-section="swatches" title="Nuancier"><span>◼</span></button>
-        <button class="rightbar-icon-btn" data-section="layers" title="Calques"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg></button>
-        <button class="rightbar-icon-btn" data-section="arrange" title="Disposition"><span>☰</span></button>
         <button class="rightbar-icon-btn" data-section="document" title="Document"><span>⧉</span></button>
         <button class="rightbar-icon-btn" data-section="plugins" title="Plug-ins"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v4M15 3v4"/><path d="M7 7h10v5a5 5 0 0 1-10 0V7z"/><path d="M12 17v4"/></svg></button>
-        <button class="rightbar-icon-btn" data-section="widgets" title="Widgets"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg></button>
       </div>
 
       <div class="props-content">
@@ -520,6 +530,15 @@
           <div class="layers-list" id="layersList"></div>
         </div>
 
+        <div class="props-section" data-section="pages">
+          <h3>Plans de travail</h3>
+          <div class="pages-list" id="pagesList"></div>
+          <div class="btn-row">
+            <button class="btn" id="pageAdd" title="Ajouter un plan de travail">+ Plan</button>
+            <button class="btn" id="pageDuplicate" title="Dupliquer le plan actif">Dupliquer</button>
+          </div>
+        </div>
+
         <div class="props-section" data-section="document">
           <h3>Document</h3>
           <div class="field-row">
@@ -640,6 +659,41 @@
   </div>
 </div>
 
+<!-- Choix des pages à l'import d'un PDF -->
+<div class="modal-overlay" id="pdfPagesModal" role="dialog" aria-modal="true" aria-labelledby="pdfPagesTitle" hidden>
+  <div class="modal-card pdf-pages-card">
+    <div class="modal-head">
+      <span id="pdfPagesTitle">Importer un PDF</span>
+      <button class="modal-close" id="pdfPagesClose" title="Fermer" aria-label="Fermer">×</button>
+    </div>
+    <div class="modal-body pdf-pages-body">
+      <p class="pdf-pages-lead" id="pdfPagesLead">Ce PDF contient plusieurs pages.</p>
+      <label class="pdf-page-option">
+        <input type="radio" name="pdfPageMode" value="first" checked>
+        <span><b>Première page</b><small>Comme avant : un seul plan de travail.</small></span>
+      </label>
+      <label class="pdf-page-option">
+        <input type="radio" name="pdfPageMode" value="pick">
+        <span><b>Une page précise</b><small>Choisissez le numéro ci-dessous.</small></span>
+      </label>
+      <div class="pdf-page-pick" id="pdfPagePick" hidden>
+        <label for="pdfPageNumber">Page</label>
+        <input type="number" id="pdfPageNumber" min="1" max="1" step="1" value="1">
+        <span class="pdf-pages-total" id="pdfPagesTotal">/ 1</span>
+      </div>
+      <label class="pdf-page-option">
+        <input type="radio" name="pdfPageMode" value="all">
+        <span><b>Toutes les pages → un plan par page</b><small>Chaque page devient un plan de travail à son format exact, placé à sa taille réelle.</small></span>
+      </label>
+      <p class="pdf-pages-note" id="pdfPagesSizes"></p>
+    </div>
+    <div class="export-actions pdf-pages-actions">
+      <button class="btn" id="pdfPagesCancel" type="button">ANNULER</button>
+      <button class="btn btn-primary" id="pdfPagesRun" type="button">IMPORTER</button>
+    </div>
+  </div>
+</div>
+
 <!-- Export avancé -->
 <div class="modal-overlay" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportTitle" hidden>
   <div class="modal-card export-card">
@@ -660,6 +714,7 @@
           <select id="exportScope">
             <option value="document">Tout le plan de travail</option>
             <option value="selection">Sélection uniquement</option>
+            <option value="pages" id="exportScopePages">Tous les plans de travail (PDF)</option>
           </select>
         </label>
         <label class="export-field" id="exportScaleField"><span>Échelle</span>

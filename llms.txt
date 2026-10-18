@@ -20,7 +20,9 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Widgets détachables : chaque panneau de droite peut flotter et se replier
 - Création assistée par IA (OpenRouter, DeepSeek) et SVG natif Recraft
 - Import SVG, SVGZ, PDF, Adobe Illustrator (.ai), EPS, images et vidéos
-- Export SVG, PDF vectoriel, PNG, JPG, WEBP (document ou sélection)
+- Import PDF multi-pages : première page, page choisie, ou un plan de travail par page
+- Plans de travail multiples : panneau, sélecteur flottant, format indépendant, historique par plan
+- Export SVG, PDF vectoriel, PDF multi-plans, PNG, JPG, WEBP (document ou sélection)
 - Projet .plume (JSON) versionné, sauvegarde automatique localStorage/IndexedDB
 - Historique annuler / rétablir
 
@@ -42,6 +44,7 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Ctrl+0 : ajuster à l'écran, Maj+1 / Maj+2 : ajuster / zoom sélection
 - Ctrl+R : règles, Ctrl+' : grille, Ctrl+; : magnétisme
 - Ctrl+K : plug-ins
+- Ctrl+Page↑ / Ctrl+Page↓ : plan de travail précédent / suivant
 - Suppr : supprimer, Échap / Entrée : terminer un tracé
 
 ## API
@@ -50,6 +53,9 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Bird.io.importSVG(text), Bird.io.importPDF(arrayBuffer), Bird.io.importEPS(arrayBuffer)
 - Bird.export({ format, scope, background, scale, returnBlob })
 - Bird.exportSVG({ background })
+- Bird.io.pdfPageCount(buffer) : nombre de pages et formats d'un PDF
+- Bird.export({ format:'pdf', scope:'pages' }) : un PDF, une page par plan de travail
+- Bird.pages.list() / count() / go(n) / add(name) / duplicate() / remove(n) / rename(n, nom) / move(n, delta)
 - Bird.view.rulers(bool), Bird.view.grid(bool), Bird.view.snap(bool)
 - Bird.widgets.detach(name) / dock(name) / dockAll() / reset()
 - BirdPlugins.register(manifest), BirdPlugins.list(), BirdPlugins.toggle(id)

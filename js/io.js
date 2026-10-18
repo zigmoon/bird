@@ -41,6 +41,17 @@ function asUint8(data) {
   return null;
 }
 
+/* pdf.js TRANSFÈRE le buffer qu'on lui donne : il le détache. Sans copie,
+   compter les pages puis convertir la page échoue avec « detached ArrayBuffer ».
+   Chaque lecture PDF travaille donc sur sa propre copie. */
+function pdfBytesCopy(data) {
+  var source = asUint8(data);
+  if (!source) return null;
+  var copy = new Uint8Array(source.byteLength);
+  copy.set(source);
+  return copy;
+}
+
 function asciiAt(bytes, pos, len) {
   var s = '';
   for (var i = 0; i < len && pos + i < bytes.length; i++) s += String.fromCharCode(bytes[pos + i]);
@@ -650,10 +661,38 @@ function buildPdfSvg(ops, page, textContent, W, H, x0, y0, y1) {
   return svg;
 }
 
+/* Compte les pages d'un PDF sans en convertir aucune (choix de page à l'import). */
+async function pdfPageCount(data) {
+  var pdfjsLib = await ensureLib('pdf');
+  var bytes = pdfBytesCopy(data);
+  if (!bytes) throw new Error('PDF vide');
+  var doc = await pdfjsLib.getDocument({
+    data: bytes,
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: false
+  }).promise;
+  var count = doc.numPages || 0;
+  var sizes = [];
+  try {
+    for (var i = 1; i <= count; i++) {
+      var page = await doc.getPage(i);
+      var view = page.view.slice();
+      sizes.push({
+        index: i,
+        width: Math.abs(view[2] - view[0]) || page.getViewport({ scale: 1 }).width,
+        height: Math.abs(view[3] - view[1]) || page.getViewport({ scale: 1 }).height
+      });
+    }
+  } catch (e) { /* dimensions optionnelles */ }
+  try { doc.destroy(); } catch (e) {}
+  return { pages: count, sizes: sizes };
+}
+
 async function pdfToSVG(data, options) {
   options = options || {};
   var pdfjsLib = await ensureLib('pdf');
-  var bytes = asUint8(data);
+  var bytes = pdfBytesCopy(data);
   if (!bytes) throw new Error('PDF vide');
   var doc = await pdfjsLib.getDocument({
     data: bytes,
@@ -786,6 +825,69 @@ async function svgToPDF(svgText, width, height, options) {
 }
 
 /* ────────────────────────────────────────────────────────────
+   EXPORT PDF MULTI-PAGES
+   Chaque plan devient une page du même PDF, à son propre format.
+   Une seule instance jsPDF : svg2pdf dessine page après page.
+──────────────────────────────────────────────────────────── */
+async function svgPagesToPDF(pages, options) {
+  options = options || {};
+  if (!pages || !pages.length) throw new Error('Aucune page à exporter');
+  var jsPDFModule = await ensureLib('jspdf');
+  var svg2pdfModule = await ensureLib('svg2pdf');
+  var svg2pdfFn = svg2pdfModule.svg2pdf;
+  if (typeof svg2pdfFn !== 'function') throw new Error('svg2pdf indisponible');
+  var jsPDF = jsPDFModule.jsPDF;
+  var pdf = null;
+
+  for (var i = 0; i < pages.length; i++) {
+    var page = pages[i];
+    var w = Math.max(1, Number(page.width) || 1);
+    var h = Math.max(1, Number(page.height) || 1);
+    var orientation = w >= h ? 'landscape' : 'portrait';
+    if (!pdf) {
+      pdf = new jsPDF({
+        orientation: orientation, unit: 'pt', format: [w, h],
+        compress: true, hotfixes: ['px_scaling']
+      });
+      try {
+        pdf.setProperties({
+          title: options.title || 'Bird',
+          subject: options.subject || 'Illustration vectorielle',
+          creator: 'Bird — éditeur vectoriel',
+          author: 'Bird'
+        });
+      } catch (e) { /* métadonnées optionnelles */ }
+    } else {
+      pdf.addPage([w, h], orientation);
+    }
+
+    var cleaned = prepareSvgForPdf(page.svg);
+    var host = document.createElement('div');
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:fixed;left:-100000px;top:0;width:' + w + 'px;height:' + h +
+      'px;overflow:hidden;pointer-events:none;';
+    document.body.appendChild(host);
+    try {
+      host.innerHTML = cleaned;
+      var svgEl = host.querySelector('svg');
+      if (!svgEl) throw new Error('SVG de la page ' + (i + 1) + ' introuvable');
+      svgEl.setAttribute('width', w);
+      svgEl.setAttribute('height', h);
+      await svg2pdfFn(svgEl, pdf, { x: 0, y: 0, width: w, height: h });
+    } finally {
+      document.body.removeChild(host);
+    }
+  }
+
+  var bytes = new Uint8Array(pdf.output('arraybuffer'));
+  return {
+    bytes: bytes,
+    blob: new Blob([bytes], { type: 'application/pdf' }),
+    pages: pages.length
+  };
+}
+
+/* ────────────────────────────────────────────────────────────
    STOCKAGE LOCAL (IndexedDB, avec repli localStorage géré par l'app)
    Permet de dépasser la limite de 5 Mo des images embarquées.
 ──────────────────────────────────────────────────────────── */
@@ -852,6 +954,8 @@ BirdIO.svgDimensions = svgDimensions;
 BirdIO.pdfToSVG = pdfToSVG;
 BirdIO.epsToFabricGroup = epsToFabricGroup;
 BirdIO.svgToPDF = svgToPDF;
+BirdIO.svgPagesToPDF = svgPagesToPDF;
+BirdIO.pdfPageCount = pdfPageCount;
 BirdIO.escapeXml = escapeXml;
 BirdIO.base64FromBytes = base64FromBytes;
 BirdIO.store = { get: storeGet, set: storeSet, delete: storeDelete };

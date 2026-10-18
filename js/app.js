@@ -93,6 +93,10 @@ const state = {
   snapEnabled: true,
   guides: [],                 // [{ axis:'x'|'y', pos:<unités document> }]
 
+  // plans de travail (pages)
+  pages: [],                  // [{ id, name, w, h, color, json }]
+  activePage: 0,
+
   // export
   exportFormat: 'svg',
   exportScope: 'document',
@@ -233,6 +237,7 @@ function init() {
   bindClipboardPaste();
   bindGuides();
   bindViewToggles();
+  bindPages();
   mountShellExtras();
   canvas.on('after:render', scheduleOverlayUpdate);
   scheduleOverlayUpdate();
@@ -395,10 +400,15 @@ function resetDocument() {
   state.undo = [];
   state.redo = [];
   state.guides = [];
+  // Un nouveau document repart d'un seul plan, au format courant.
+  state.pages = [{ id: newPageId(), name: 'Plan 1', w: state.artboardW, h: state.artboardH, color: state.artboardColor, json: null }];
+  state.activePage = 0;
+  pageHistory.clear();
   state.dirty = false;
   setDirty(false);
   renderGuides(true);
   renderLayers();
+  renderPages();
   updateUI();
   toast('Nouveau document');
 }
@@ -1760,13 +1770,138 @@ async function importPDF(file, dropPoint, name) {
   const toastMsg = toast('Analyse du PDF…');
   try {
     const buffer = await file.arrayBuffer();
+    let info = { pages: 1, sizes: [] };
+    try { info = await BirdIO.pdfPageCount(buffer); }
+    catch (e) { info = { pages: 1, sizes: [] }; }
+
+    if (info.pages > 1) {
+      const choice = await askPdfPages(info, name);
+      if (!choice) return;                       // l'utilisateur a annulé
+      if (choice.mode === 'all') {
+        await importPdfAllPages(buffer, info, name);
+        return;
+      }
+      const result = await BirdIO.pdfToSVG(buffer, { page: choice.page });
+      importSVGText(result.svg, dropPoint, 'Import PDF p' + choice.page);
+      toast('PDF page ' + choice.page + '/' + info.pages + ' importée ✓');
+      return;
+    }
+
     const result = await BirdIO.pdfToSVG(buffer);
     importSVGText(result.svg, dropPoint, 'Import PDF');
-    toast('PDF vectoriel importé ✓' + (result.pages > 1 ? ' (page 1/' + result.pages + ')' : ''));
+    toast('PDF vectoriel importé ✓');
   } catch (err) {
     console.error('[Bird PDF]', err);
     toast('Import PDF impossible : ' + (err.message || 'format non pris en charge'), true);
   }
+}
+
+/* Un plan de travail par page du PDF, au format exact de chaque page. */
+async function importPdfAllPages(buffer, info, name) {
+  const baseName = String(name || 'PDF').replace(/\.(pdf|ai)$/i, '').slice(0, 40) || 'PDF';
+  toast('Import de ' + info.pages + ' pages…');
+  let done = 0;
+  for (let i = 1; i <= info.pages; i++) {
+    let result;
+    try {
+      result = await BirdIO.pdfToSVG(buffer, { page: i });
+    } catch (err) {
+      console.warn('[Bird PDF] page ' + i + ' ignorée', err);
+      continue;
+    }
+    // Chaque page : nouveau plan, format de la page PDF, contenu à 1:1.
+    addPage(baseName + ' p' + i);
+    setArtboardSize(Math.round(result.width), Math.round(result.height));
+    await importSVGExact(result.svg, 'Import PDF p' + i);
+    done++;
+  }
+  renderPages();
+  setDirty(true);
+  toast(done + ' plan(s) importé(s) depuis le PDF ✓');
+}
+
+/* Place un SVG importé à sa position et sa taille d'origine (0,0 à 1:1).
+   Le flux « importer » classique centre et réduit l'objet : ici on veut la
+   fidélité du fichier, pas une vignette confortable. */
+function importSVGExact(svgText, label) {
+  return new Promise((resolve) => {
+    try {
+      fabric.loadSVGFromString(String(svgText), (objects, options) => {
+        if (!objects || !objects.length) { resolve(null); return; }
+        const group = objects.length === 1 && objects[0].type === 'path'
+          ? objects[0]
+          : fabric.util.groupSVGElements(objects, options);
+        if (!group) { resolve(null); return; }
+        beginTxn();
+        group.set({ left: 0, top: 0, originX: 'left', originY: 'top', scaleX: 1, scaleY: 1 });
+        canvas.add(group);
+        commitUndo(label || 'Import PDF');
+        resolve(group);
+      });
+    } catch (e) {
+      console.error('[Bird SVG exact]', e);
+      resolve(null);
+    }
+  });
+}
+
+/* Demande à l'utilisateur quelle(s) page(s) importer. Résout null si annulé. */
+function askPdfPages(info, name) {
+  return new Promise((resolve) => {
+    const modal = $('pdfPagesModal');
+    if (!modal) { resolve({ mode: 'first', page: 1 }); return; }
+
+    const lead = $('pdfPagesLead');
+    const total = $('pdfPagesTotal');
+    const number = $('pdfPageNumber');
+    const pick = $('pdfPagePick');
+    const sizes = $('pdfPagesSizes');
+
+    lead.textContent = '« ' + (name || 'PDF') + ' » contient ' + info.pages + ' pages.';
+    total.textContent = '/ ' + info.pages;
+    number.max = String(info.pages);
+    number.value = '1';
+    if (info.sizes && info.sizes.length) {
+      const first = info.sizes[0];
+      sizes.textContent = 'Format de la page 1 : ' + Math.round(first.width) + ' × ' +
+        Math.round(first.height) + ' px';
+    } else {
+      sizes.textContent = '';
+    }
+    document.querySelectorAll('input[name="pdfPageMode"]').forEach(r => {
+      r.checked = r.value === 'first';
+      r.onchange = () => { pick.hidden = r.value !== 'pick' || !r.checked; };
+    });
+    pick.hidden = true;
+    modal.hidden = false;
+
+    const cleanup = () => {
+      modal.hidden = true;
+      $('pdfPagesClose').onclick = null;
+      $('pdfPagesCancel').onclick = null;
+      $('pdfPagesRun').onclick = null;
+      modal.onclick = null;
+      number.onkeydown = null;
+    };
+    const cancel = () => { cleanup(); resolve(null); };
+    const confirm = () => {
+      const mode = (document.querySelector('input[name="pdfPageMode"]:checked') || {}).value || 'first';
+      const page = Math.max(1, Math.min(info.pages, parseInt(number.value, 10) || 1));
+      cleanup();
+      resolve({ mode: mode === 'all' ? 'all' : (mode === 'pick' ? 'pick' : 'first'), page });
+    };
+
+    $('pdfPagesClose').onclick = cancel;
+    $('pdfPagesCancel').onclick = cancel;
+    $('pdfPagesRun').onclick = confirm;
+    modal.onclick = (e) => { if (e.target === modal) cancel(); };
+    number.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') confirm();
+      if (e.key === 'Escape') cancel();
+    };
+    setTimeout(() => $('pdfPagesRun').focus(), 30);
+  });
 }
 
 /* ── EPS / Illustrator 8 : interpréteur PostScript ── */
@@ -2071,17 +2206,20 @@ function penRedoPoint() {
 
 function loadJSON(json) {
   canvas.clear();
-  canvas.loadFromJSON(json, () => {
-    canvas.getObjects().forEach(o => {
-      if (o.type === 'i-text' || o.type === 'textbox') o.set({ editable: true });
-      if (o._plumeData) attachPenSerializer(o);
-      if (o.birdLocked) setObjectLocked(o, true);
-      if (o.birdHidden) { o.visible = false; o.evented = false; }
+  return new Promise((resolve) => {
+    canvas.loadFromJSON(json, () => {
+      canvas.getObjects().forEach(o => {
+        if (o.type === 'i-text' || o.type === 'textbox') o.set({ editable: true });
+        if (o._plumeData) attachPenSerializer(o);
+        if (o.birdLocked) setObjectLocked(o, true);
+        if (o.birdHidden) { o.visible = false; o.evented = false; }
+      });
+      canvas.requestRenderAll();
+      updateHint();
+      renderLayers();
+      scheduleOverlayUpdate();
+      resolve();
     });
-    canvas.requestRenderAll();
-    updateHint();
-    renderLayers();
-    scheduleOverlayUpdate();
   });
 }
 
@@ -2731,8 +2869,12 @@ function syncExportUI() {
     jpg: 'JPG sans transparence : le fond est composité en blanc.',
     webp: 'WEBP : meilleur compromis poids/qualité pour le web.'
   };
-  $('exportNote').textContent = notes[state.exportFormat] || '';
-  $('exportSize').textContent = currentExportSize();
+  $('exportNote').textContent = state.exportScope === 'pages'
+    ? 'Chaque plan de travail devient une page du PDF, à son propre format. Le plus proche d’un document Illustrator multi-plans.'
+    : (notes[state.exportFormat] || '');
+  $('exportSize').textContent = state.exportScope === 'pages'
+    ? state.pages.length + ' pages PDF'
+    : currentExportSize();
 }
 
 function bindExportModal() {
@@ -2741,6 +2883,14 @@ function bindExportModal() {
   const open = () => {
     state.exportScope = canvas.getActiveObjects().length ? 'selection' : 'document';
     $('exportScope').value = state.exportScope;
+    // L'option multi-plans n'a de sens qu'avec au moins deux plans.
+    const pagesOpt = $('exportScopePages');
+    if (pagesOpt) {
+      pagesOpt.disabled = state.pages.length < 2;
+      pagesOpt.textContent = state.pages.length < 2
+        ? 'Tous les plans de travail (PDF)'
+        : 'Tous les plans de travail — ' + state.pages.length + ' pages (PDF)';
+    }
     modal.hidden = false;
     syncExportUI();
   };
@@ -2754,6 +2904,10 @@ function bindExportModal() {
   });
   $('exportScope').addEventListener('change', () => {
     state.exportScope = $('exportScope').value;
+    // La portée « tous les plans » implique le PDF.
+    if (state.exportScope === 'pages' && state.exportFormat !== 'pdf') {
+      state.exportFormat = 'pdf';
+    }
     syncExportUI();
   });
   $('exportScale').addEventListener('change', syncExportUI);
@@ -3754,6 +3908,314 @@ function updateHint() {
   els.hint.style.pointerEvents = count ? 'none' : 'none';
 }
 
+/* ════════════════════════════════════════════════════════════
+   PLANS DE TRAVAIL (pages)
+   ────────────────────────────────────────────────────────────
+   Un seul canvas : le plan actif vit dedans, les autres sont
+   sérialisés dans `state.pages[i].json`. Changer de plan, c'est
+   vider le canvas et recharger le JSON du plan cible.
+   L'historique est PAR PLAN : chaque plan garde son propre
+   annuler/rétablir, ce qui évite de stocker tous les plans dans
+   chaque instantané (images comprises).
+════════════════════════════════════════════════════════════ */
+const pageHistory = new Map();   // pageId -> { undo, redo }
+let pageSeq = 1;
+
+function newPageId() {
+  pageSeq += 1;
+  return 'p' + Date.now().toString(36) + '-' + pageSeq;
+}
+
+function createPage(name, w, h, color) {
+  return {
+    id: newPageId(),
+    name: name || 'Plan ' + (state.pages.length + 1),
+    w: w || state.artboardW,
+    h: h || state.artboardH,
+    color: color !== undefined ? color : state.artboardColor,
+    json: null            // null = ce plan est celui qui est sur le canvas
+  };
+}
+
+function activePage() {
+  return state.pages[state.activePage] || null;
+}
+
+/* Écrit l'état du canvas dans le plan actif. */
+function flushActivePage() {
+  const page = activePage();
+  if (!page) return;
+  page.w = state.artboardW;
+  page.h = state.artboardH;
+  page.color = state.artboardColor;
+  page.json = canvasJSON();
+}
+
+/* Mémorise les piles d'historique du plan qui s'en va. */
+function stashPageHistory() {
+  const page = activePage();
+  if (!page) return;
+  pageHistory.set(page.id, { undo: state.undo.slice(), redo: state.redo.slice() });
+}
+
+function restorePageHistory(pageId) {
+  const saved = pageHistory.get(pageId);
+  state.undo = saved ? saved.undo.slice() : [];
+  state.redo = saved ? saved.redo.slice() : [];
+  updateUndoUI();
+}
+
+/* Applique le format d'un plan au canvas. */
+function applyPageArtboard(page) {
+  state.artboardW = page.w;
+  state.artboardH = page.h;
+  state.artboardColor = page.color;
+  canvas.__plume.artW = page.w;
+  canvas.__plume.artH = page.h;
+  canvas.__plume.artColor = page.color;
+  canvas.backgroundColor = '';
+  if ($('artboardColor')) $('artboardColor').value = page.color === 'transparent' ? '#ffffff' : page.color;
+}
+
+/* Installe un plan sur le canvas (échange bas niveau, sans vue ni toast).
+   `loadFromJSON` est asynchrone dès qu'une page contient une image : on
+   attend la fin pour que l'export voie réellement les objets du plan. */
+async function loadPageIntoCanvas(index) {
+  flushActivePage();
+  stashPageHistory();
+  state.activePage = index;
+  const page = state.pages[index];
+  if (!page) return;
+  canvas.discardActiveObject();
+  applyPageArtboard(page);
+  await loadJSON(page.json || { version: '5.1.0', objects: [], background: '' });
+  page.json = null;                 // c'est de nouveau le plan vivant
+  restorePageHistory(page.id);
+  renderLayers();
+  renderPages();
+  updateUI();
+}
+
+async function gotoPage(index, options) {
+  options = options || {};
+  if (!state.pages.length) return;
+  index = Math.max(0, Math.min(state.pages.length - 1, index));
+  if (index === state.activePage && !options.force) return;
+
+  if (!options.silent) {
+    // On termine proprement ce qui est en cours avant de changer de plan.
+    if (state.penActive) endPen(true);
+    if (state.shapeObj) { cancelTxn(); state.shapeObj = null; state.shapeStart = null; }
+    cancelTxn();
+    flushPropChange();
+  }
+
+  await loadPageIntoCanvas(index);
+
+  if (!options.keepView) {
+    requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+  }
+  if (!options.silent) toast('Plan « ' + state.pages[index].name + ' »');
+}
+
+function duplicatePage() {
+  flushActivePage();
+  const source = activePage();
+  if (!source) return;
+  const copy = createPage(source.name + ' copie', source.w, source.h, source.color);
+  copy.json = JSON.parse(JSON.stringify(source.json || { version: '5.1.0', objects: [] }));
+  const at = state.activePage + 1;
+  state.pages.splice(at, 0, copy);
+  renderPages();
+  gotoPage(at, { force: true });
+  setDirty(true);
+  toast('Plan dupliqué');
+}
+
+function addPage(name) {
+  flushActivePage();
+  stashPageHistory();
+  loadJSON({ version: '5.1.0', objects: [], background: '' });
+  state.pages.push(createPage(name));
+  state.activePage = state.pages.length - 1;
+  state.undo = [];
+  state.redo = [];
+  updateUndoUI();
+  applyPageArtboard(activePage());
+  renderLayers();
+  renderPages();
+  updateUI();
+  requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+  setDirty(true);
+  toast('Plan « ' + activePage().name + ' » ajouté');
+  return activePage();
+}
+
+async function deletePage(index) {
+  if (state.pages.length <= 1) {
+    toast('Un document doit garder au moins un plan', true);
+    return;
+  }
+  index = index === undefined ? state.activePage : index;
+  const page = state.pages[index];
+  if (!page) return;
+  const count = index === state.activePage ? canvas.getObjects().length
+    : (page.json && page.json.objects ? page.json.objects.length : 0);
+  if (count > 0 && !window.confirm('Supprimer « ' + page.name + ' » et ses ' + count + ' objet(s) ?')) return;
+  pageHistory.delete(page.id);
+  const wasActive = index === state.activePage;
+  if (wasActive) flushActivePage();
+  state.pages.splice(index, 1);
+  if (index < state.activePage) state.activePage -= 1;
+  else if (wasActive) {
+    state.activePage = Math.min(state.activePage, state.pages.length - 1);
+    await loadPageIntoCanvas(state.activePage);
+    requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+  }
+  renderPages();
+  setDirty(true);
+  toast('Plan supprimé');
+}
+
+function renamePage(index, name) {
+  const page = state.pages[index];
+  if (!page) return;
+  const clean = String(name || '').trim().slice(0, 60);
+  if (!clean) return;
+  page.name = clean;
+  renderPages();
+  setDirty(true);
+}
+
+function movePage(index, delta) {
+  const target = index + delta;
+  if (target < 0 || target >= state.pages.length) return;
+  flushActivePage();
+  const [page] = state.pages.splice(index, 1);
+  state.pages.splice(target, 0, page);
+  if (state.activePage === index) state.activePage = target;
+  else if (state.activePage === target) state.activePage = index;
+  activePage().json = null;
+  renderPages();
+  setDirty(true);
+}
+
+function applyPageList(pages, active) {
+  state.pages = pages.map((p, i) => ({
+    id: p.id || newPageId(),
+    name: p.name || 'Plan ' + (i + 1),
+    w: Number(p.w) || 800,
+    h: Number(p.h) || 600,
+    color: p.color || '#ffffff',
+    json: p.json || null
+  }));
+  state.activePage = Math.max(0, Math.min(state.pages.length - 1, Number(active) || 0));
+  pageHistory.clear();
+  state.undo = [];
+  state.redo = [];
+  updateUndoUI();
+}
+
+function renderPages() {
+  const list = $('pagesList');
+  if (list) {
+    list.innerHTML = '';
+    state.pages.forEach((page, index) => {
+      const row = document.createElement('div');
+      row.className = 'page-row' + (index === state.activePage ? ' is-active' : '');
+      row.dataset.index = String(index);
+
+      const num = document.createElement('span');
+      num.className = 'page-num';
+      num.textContent = String(index + 1);
+
+      const body = document.createElement('div');
+      body.className = 'page-body';
+      const name = document.createElement('span');
+      name.className = 'page-name';
+      name.textContent = page.name;
+      name.title = 'Double-clic pour renommer';
+      name.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        name.contentEditable = 'true';
+        name.focus();
+        document.execCommand && document.execCommand('selectAll', false, null);
+        const done = () => {
+          name.contentEditable = 'false';
+          renamePage(index, name.textContent);
+        };
+        name.addEventListener('blur', done, { once: true });
+        name.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); name.blur(); }
+          if (ev.key === 'Escape') { ev.preventDefault(); name.textContent = page.name; name.blur(); }
+          ev.stopPropagation();
+        });
+      });
+      const meta = document.createElement('span');
+      meta.className = 'page-meta';
+      const count = index === state.activePage
+        ? canvas.getObjects().length
+        : (page.json && page.json.objects ? page.json.objects.length : 0);
+      meta.textContent = Math.round(page.w) + '×' + Math.round(page.h) + ' · ' + count + ' obj.';
+      body.appendChild(name);
+      body.appendChild(meta);
+
+      const tools = document.createElement('div');
+      tools.className = 'page-tools';
+      const up = document.createElement('button');
+      up.type = 'button'; up.className = 'page-tool'; up.title = 'Monter'; up.textContent = '↑';
+      up.disabled = index === 0;
+      up.addEventListener('click', (e) => { e.stopPropagation(); movePage(index, -1); });
+      const down = document.createElement('button');
+      down.type = 'button'; down.className = 'page-tool'; down.title = 'Descendre'; down.textContent = '↓';
+      down.disabled = index === state.pages.length - 1;
+      down.addEventListener('click', (e) => { e.stopPropagation(); movePage(index, 1); });
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'page-tool page-del'; del.title = 'Supprimer'; del.textContent = '×';
+      del.addEventListener('click', (e) => { e.stopPropagation(); deletePage(index); });
+      tools.appendChild(up); tools.appendChild(down); tools.appendChild(del);
+
+      row.appendChild(num);
+      row.appendChild(body);
+      row.appendChild(tools);
+      row.addEventListener('click', () => gotoPage(index));
+      list.appendChild(row);
+    });
+  }
+
+  const switcher = $('pageSwitcher');
+  const label = $('pageCurrentLabel');
+  const counter = $('pageCurrentCount');
+  if (switcher) switcher.hidden = state.pages.length < 2;
+  if (label) label.textContent = activePage() ? activePage().name : 'Plan 1';
+  if (counter) counter.textContent = (state.activePage + 1) + ' / ' + state.pages.length;
+  const prev = $('pagePrev');
+  const next = $('pageNext');
+  if (prev) prev.disabled = state.activePage === 0;
+  if (next) next.disabled = state.activePage >= state.pages.length - 1;
+}
+
+function bindPages() {
+  const add = $('pageAdd');
+  if (add) add.addEventListener('click', () => addPage());
+  const dup = $('pageDuplicate');
+  if (dup) dup.addEventListener('click', duplicatePage);
+  const prev = $('pagePrev');
+  if (prev) prev.addEventListener('click', () => gotoPage(state.activePage - 1));
+  const next = $('pageNext');
+  if (next) next.addEventListener('click', () => gotoPage(state.activePage + 1));
+  const current = $('pageCurrent');
+  if (current) current.addEventListener('click', () => {
+    els.rightSidebar.classList.remove('collapsed');
+    requestAnimationFrame(() => {
+      const section = document.querySelector('.props-section[data-section="pages"]');
+      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+  renderPages();
+}
+
+
 function setDirty(d) {
   state.dirty = d;
   els.dirtyDot.hidden = !d;
@@ -3807,11 +4269,25 @@ function saveDoc() {
 }
 
 function createProjectPayload() {
+  flushActivePage();
+  const total = state.pages.reduce((sum, p, i) =>
+    sum + (i === state.activePage ? canvas.getObjects().length
+      : (p.json && p.json.objects ? p.json.objects.length : 0)), 0);
   return {
     app: 'Bird',
     format: 'bird-vector-project',
     version: PROJECT_VERSION,
     artboard: { w: state.artboardW, h: state.artboardH, color: state.artboardColor },
+    pages: state.pages.map((p, i) => ({
+      id: p.id,
+      name: p.name,
+      w: p.w,
+      h: p.h,
+      color: p.color,
+      json: i === state.activePage ? canvasJSON() : p.json
+    })),
+    activePage: state.activePage,
+    objectCount: total,
     view: {
       showGrid: state.showGrid,
       gridSize: state.gridSize,
@@ -3819,6 +4295,8 @@ function createProjectPayload() {
       snapEnabled: state.snapEnabled,
       guides: state.guides.map(g => ({ axis: g.axis, pos: g.pos }))
     },
+    // `json` reste le plan actif : un lecteur qui ignore `pages` ouvre au moins
+    // le plan affiché (compatibilité ascendante des anciens projets).
     json: canvasJSON(),
     savedAt: Date.now()
   };
@@ -3839,22 +4317,68 @@ async function loadDoc() {
   }
   if (!payload) return false;
   try {
-    if (payload.artboard) {
-      state.artboardW = payload.artboard.w;
-      state.artboardH = payload.artboard.h;
-      state.artboardColor = payload.artboard.color;
-      canvas.__plume.artW = state.artboardW;
-      canvas.__plume.artH = state.artboardH;
-      canvas.__plume.artColor = state.artboardColor;
-      canvas.backgroundColor = ''; // le fond est géré par _renderBackground
-    }
-    applyProjectView(payload.view);
-    if (payload.json) loadJSON(payload.json);
+    applyProjectPayload(payload);
     return true;
   } catch (e) {
     console.warn('Chargement doc échoué', e);
     return false;
   }
+}
+
+/* Point d'entrée unique pour installer un projet normalisé sur l'éditeur,
+   qu'il vienne du stockage local, d'un fichier .plume ou de l'API. */
+function applyProjectPayload(payload) {
+  if (!payload) return;
+  if (payload.artboard) {
+    state.artboardW = payload.artboard.w;
+    state.artboardH = payload.artboard.h;
+    state.artboardColor = payload.artboard.color;
+    canvas.__plume.artW = state.artboardW;
+    canvas.__plume.artH = state.artboardH;
+    canvas.__plume.artColor = state.artboardColor;
+    canvas.backgroundColor = ''; // le fond est géré par _renderBackground
+  }
+  applyProjectView(payload.view);
+
+  if (payload.pages && payload.pages.length) {
+    // Le plan actif est chargé sur le canvas, les autres restent sérialisés.
+    const active = Math.max(0, Math.min(payload.pages.length - 1, payload.activePage || 0));
+    const pages = payload.pages.map((p, i) => ({
+      id: p.id || newPageId(),
+      name: p.name || 'Plan ' + (i + 1),
+      w: p.w,
+      h: p.h,
+      color: p.color,
+      json: i === active ? null : p.json
+    }));
+    state.pages = pages;
+    state.activePage = active;
+    pageHistory.clear();
+    const page = pages[active];
+    applyPageArtboard(page);
+    loadJSON(payload.pages[active].json);
+    state.undo = [];
+    state.redo = [];
+    updateUndoUI();
+    renderLayers();
+    renderPages();
+    return;
+  }
+
+  // Projet mono-plan (ancien format) : on en fait le premier plan.
+  state.pages = [{
+    id: newPageId(),
+    name: 'Plan 1',
+    w: state.artboardW,
+    h: state.artboardH,
+    color: state.artboardColor,
+    json: null
+  }];
+  state.activePage = 0;
+  pageHistory.clear();
+  if (payload.json) loadJSON(payload.json);
+  renderLayers();
+  renderPages();
 }
 
 function applyProjectView(view) {
@@ -3886,9 +4410,31 @@ function normalizeProjectPayload(data) {
   const width = Number(sourceArtboard.w || state.artboardW);
   const height = Number(sourceArtboard.h || state.artboardH);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width > 50000 || height > 50000) throw new Error('Dimensions de plan de travail invalides');
+  const artboard = { w: width, h: height, color: sourceArtboard.color === 'transparent' ? 'transparent' : (sourceArtboard.color || '#ffffff') };
+
+  // Projet multi-plans : on valide chaque plan, on ignore les entrées cassées.
+  let pages = null;
+  let activePage = 0;
+  if (Array.isArray(wrapped.pages) && wrapped.pages.length) {
+    pages = wrapped.pages
+      .filter(p => p && p.json && Array.isArray(p.json.objects))
+      .map((p, i) => ({
+        id: typeof p.id === 'string' && p.id ? p.id : null,
+        name: String(p.name || 'Plan ' + (i + 1)).slice(0, 60),
+        w: Math.min(50000, Math.max(1, Number(p.w) || width)),
+        h: Math.min(50000, Math.max(1, Number(p.h) || height)),
+        color: p.color === 'transparent' ? 'transparent' : (p.color || artboard.color),
+        json: p.json
+      }));
+    if (!pages.length) pages = null;
+    activePage = Math.max(0, Math.min(pages ? pages.length - 1 : 0, Number(wrapped.activePage) || 0));
+  }
+
   return {
     version: Number(wrapped.version) || 0,
-    artboard: { w: width, h: height, color: sourceArtboard.color === 'transparent' ? 'transparent' : (sourceArtboard.color || '#ffffff') },
+    artboard,
+    pages,
+    activePage,
     view: wrapped.view || null,
     json: wrapped.json,
     savedAt: Number(wrapped.savedAt) || null
@@ -3949,8 +4495,7 @@ function exportBounds(scope) {
 }
 
 /**
- * Export unifié.
- * opts = { format:'svg'|'pdf'|'png'|'jpg'|'webp', scope:'document'|'selection',
+ * Export unifié. * opts = { format:'svg'|'pdf'|'png'|'jpg'|'webp', scope:'document'|'selection',
  *          scale:1..4, background:'artboard'|'transparent'|'white', returnBlob:boolean }
  */
 async function runExport(opts) {
@@ -3958,6 +4503,13 @@ async function runExport(opts) {
   finalizePendingForExport();
   const format = opts.format || 'svg';
   const scope = opts.scope || 'document';
+
+  // Export multi-plans : un seul PDF, une page par plan de travail.
+  if (scope === 'pages') {
+    if (format !== 'pdf') { toast('L’export multi-plans produit un PDF', true); return null; }
+    return await exportPagesPDF(opts);
+  }
+
   const bounds = exportBounds(scope);
   if (!bounds) { toast('Sélectionnez au moins un objet', true); return null; }
 
@@ -4037,6 +4589,59 @@ async function runExport(opts) {
     else if (savedSelection) canvas.discardActiveObject();
     refreshActiveSelection();
     canvas.requestRenderAll();
+  }
+}
+
+/* ── PDF de tous les plans ──
+   On installe chaque plan sur le canvas, on en tire un SVG au format exact
+   du plan, puis on rend les pages dans un seul document jsPDF. */
+async function exportPagesPDF(opts) {
+  if (!window.BirdIO || !BirdIO.svgPagesToPDF) {
+    toast('Moteur PDF indisponible', true);
+    return null;
+  }
+  if (!state.pages.length) return null;
+  const initialPage = state.activePage;
+  const savedVpt = canvas.viewportTransform.slice();
+  const savedActive = canvas.getActiveObject();
+  const background = opts.background || 'artboard';
+  const entries = [];
+
+  canvas.discardActiveObject();
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  try {
+    toast('Composition du PDF (' + state.pages.length + ' plans)…');
+    for (let i = 0; i < state.pages.length; i++) {
+      if (i !== state.activePage) await loadPageIntoCanvas(i);
+      const bounds = exportBounds('document');
+      const svg = buildSVGString(bounds.width, bounds.height, { bounds, background });
+      entries.push({ svg, width: bounds.width, height: bounds.height });
+    }
+  } catch (err) {
+    console.error('[Bird export pages]', err);
+    toast('Export des plans impossible : ' + (err.message || 'erreur'), true);
+    return null;
+  } finally {
+    if (state.activePage !== initialPage) await loadPageIntoCanvas(initialPage);
+    canvas.setViewportTransform(savedVpt);
+    if (savedActive) { try { canvas.setActiveObject(savedActive); } catch (e) {} }
+    canvas.requestRenderAll();
+  }
+
+  try {
+    const result = await BirdIO.svgPagesToPDF(entries, {
+      title: opts.filename || 'Bird',
+      subject: state.pages.length + ' plan(s) de travail'
+    });
+    if (opts.returnBlob) return result.blob;
+    downloadBlob(result.blob,
+      (opts.filename || ('bird-' + timestamp())) + '-' + result.pages + 'plans.pdf',
+      result.pages + ' plans exportés en PDF ✓');
+    return result.blob;
+  } catch (err) {
+    console.error('[Bird export pages]', err);
+    toast('Export PDF impossible : ' + (err.message || 'erreur'), true);
+    return null;
   }
 }
 
@@ -4136,15 +4741,13 @@ function openFileContent(content, name) {
   } else {
     try {
       const data = normalizeProjectPayload(JSON.parse(content));
-      setArtboardSize(data.artboard.w, data.artboard.h);
-      setArtboardColor(data.artboard.color);
-      applyProjectView(data.view);
-      loadJSON(data.json);
+      applyProjectPayload(data);
       state.undo = [];
       state.redo = [];
       setDirty(false);
       updateUndoUI();
-      toast(data.version < PROJECT_VERSION ? 'Ancien projet migré et ouvert ✓' : 'Document ouvert ✓');
+      const extra = data.pages && data.pages.length > 1 ? ' — ' + data.pages.length + ' plans' : '';
+      toast((data.version < PROJECT_VERSION ? 'Ancien projet migré et ouvert ✓' : 'Document ouvert ✓') + extra);
     } catch (err) { console.warn('[Bird project]', err); toast(err.message || 'Fichier invalide', true); }
   }
 }
@@ -4211,6 +4814,13 @@ function bindKeyboard() {
         els.rightSidebar.classList.remove('collapsed');
         const target = document.getElementById('section-plugins');
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      return;
+    }
+    if (cmd && (e.key === 'PageDown' || e.key === 'PageUp')) {
+      e.preventDefault();
+      if (state.pages.length > 1) {
+        gotoPage(state.activePage + (e.key === 'PageDown' ? 1 : -1));
       }
       return;
     }
@@ -4728,7 +5338,7 @@ window.addEventListener('resize', resizeCanvas);
    API PUBLIQUE (intégration Astro / Rust / automatisation)
 ════════════════════════════════════════════════════════════ */
 window.Bird = {
-  version: '1.6.0',
+  version: '1.7.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
@@ -4748,16 +5358,27 @@ window.Bird = {
     payload: createProjectPayload,
     load: (payload) => {
       const data = normalizeProjectPayload(payload);
-      setArtboardSize(data.artboard.w, data.artboard.h);
-      setArtboardColor(data.artboard.color);
-      applyProjectView(data.view);
-      loadJSON(data.json);
+      applyProjectPayload(data);
       state.undo = [];
       state.redo = [];
       updateUndoUI();
       setDirty(false);
+      return requestAnimationFrame(() => { resizeCanvas(); fitView(); });
     },
     validate: (payload) => normalizeProjectPayload(payload)
+  },
+  pages: {
+    list: () => state.pages.map((p, i) => ({
+      index: i, id: p.id, name: p.name, width: p.w, height: p.h, active: i === state.activePage
+    })),
+    active: () => state.activePage,
+    count: () => state.pages.length,
+    go: (index) => gotoPage(index),
+    add: (name) => addPage(name),
+    duplicate: duplicatePage,
+    remove: (index) => deletePage(index),
+    rename: (index, name) => renamePage(index, name),
+    move: (index, delta) => movePage(index, delta)
   },
   io: {
     importSVG: (text, point) => importSVGText(text, point),
