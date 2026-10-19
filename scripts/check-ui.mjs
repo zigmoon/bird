@@ -239,11 +239,71 @@ function checkTranslationSource() {
   }
 }
 
+/* ── 6. Une montée de version ne touche pas les dépendances ──
+   Le numéro de version de l'application a été remplacé à l'aveugle dans
+   les fichiers de verrouillage : `icu_properties`, `icu_collections` et
+   quatre autres crates — légitimement en 2.3.0 — se sont retrouvés en
+   2.3.1, version qui n'existe pas. La compilation de l'application de
+   bureau échouait sur les trois systèmes (« failed to select a version
+   for the requirement icu_properties »).
+
+   Ici on ne vérifie pas « les fichiers sont cohérents » — Cargo le fait
+   et c'est trop tard — mais la cause : notre version ne doit apparaître
+   QUE sur nos propres paquets. */
+function checkLockfileVersions() {
+  const appVersion = (() => {
+    const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+    const m = app.match(/^\s*version:\s*'([\d.]+)'/m);
+    return m ? m[1] : null;
+  })();
+  if (!appVersion) {
+    errors.push('js/app.js — version de l’application introuvable (contrôle des lockfiles impossible)');
+    return;
+  }
+
+  const cargo = path.join(root, 'desktop', 'src-tauri', 'Cargo.lock');
+  if (fs.existsSync(cargo)) {
+    // Le fichier est en CRLF sous Windows : sans ce nettoyage, `^...$` ne
+    // matche jamais et le contrôle passe toujours au vert (vérifié).
+    const lines = fs.readFileSync(cargo, 'utf8').split('\n').map((l) => l.replace(/\r$/, ''));
+    let name = null;
+    for (const line of lines) {
+      const n = line.match(/^name = "(.+)"$/);
+      if (n) { name = n[1]; continue; }
+      const v = line.match(/^version = "(.+)"$/);
+      if (v && name && v[1] === appVersion && name !== 'bird-desktop') {
+        errors.push(
+          `desktop/src-tauri/Cargo.lock — le crate tiers « ${name} » porte la version ${appVersion}\n` +
+          '    C’est la version de l’application, pas la sienne : une montée de version\n' +
+          '    a été appliquée à l’aveugle sur tout le fichier. Seul `bird-desktop` doit changer.'
+        );
+      }
+    }
+  }
+
+  for (const rel of ['astro/package-lock.json', 'desktop/package-lock.json']) {
+    const file = path.join(root, rel);
+    if (!fs.existsSync(file)) continue;
+    let json;
+    try { json = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch (e) { errors.push(`${rel} — JSON invalide : ${e.message}`); continue; }
+    for (const [key, info] of Object.entries(json.packages || {})) {
+      if (key === '' || !info || info.version !== appVersion) continue;
+      errors.push(
+        `${rel} — le paquet « ${key.replace(/^node_modules\//, '')} » porte la version ${appVersion}\n` +
+        '    C’est la version de l’application : une montée de version a été appliquée\n' +
+        '    à l’aveugle. Régénérer le fichier avec `npm install --package-lock-only`.'
+      );
+    }
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
 checkMonochrome();
 checkTranslationSource();
+checkLockfileVersions();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -251,5 +311,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, versions des lockfiles');
 for (const n of notes) console.log('  · ' + n);
