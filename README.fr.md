@@ -591,6 +591,23 @@ npx serve .          # http://localhost:3000
 La sauvegarde locale est déclenchée 1,2 s après chaque modification, et à la fermeture.
 Les bibliothèques PDF/EPS ne sont téléchargées qu’au premier import ou export concerné.
 Les préférences d’interface (widgets détachés, plug-ins actifs, réglages de plug-ins) vivent dans `localStorage` et n’entrent jamais dans le fichier projet.
+
+Deux espaces de coordonnées, et les mélanger ne fait aucun bruit :
+
+* `canvas.getPointer(e)` renvoie des coordonnées **document** (il défait
+  `viewportTransform`) ; `canvas.getPointer(e, true)` renvoie des pixels
+  **canvas**. Tout ce qui place ou sélectionne un objet veut du document — mais
+  l’ancre du zoom veut du canvas. Passer des coordonnées document à
+  `zoomAtPoint` faisait dériver toute la vue à chaque cran de molette (35 px en
+  cinq crans, mesuré). `canvasPointFromEvent()` calcule le point canvas
+  directement depuis l’évènement et le rectangle du canvas, ce qui évite aussi le
+  cache `_pointer` que `getPointer(e, true)` peut rejouer.
+* Chaque trait de 1 px est calé sur la grille des pixels **physiques**, pas sur
+  `+0,5` CSS : `Math.round(v * dpr) / dpr + 0.5 / dpr` avec `lineWidth: 1 / dpr`.
+  L’idiome `+0,5` n’est juste qu’à DPR 1 ; à 1,5 (cette machine) le cadre du plan
+  bavait sur deux pixels, et le flou changeait à chaque cran de zoom — le cadre
+  semblait donc se décaler tout seul.
+
 ### Invariants d’interface, vérifiés avant chaque build
 
 `node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode quatre

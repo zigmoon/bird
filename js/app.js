@@ -648,7 +648,8 @@ function bindCanvas() {
     let factor = Math.pow(1.0015, -delta);
     const newZoom = clamp(state.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     const realFactor = newZoom / state.zoom;
-    zoomAtPoint(canvas.getPointer(e), realFactor);
+    // Ancrage en coordonnées canvas : le point sous le curseur ne bouge pas.
+    zoomAtPoint(canvasPointFromEvent(e), realFactor);
     updateZoomUI();
   });
 
@@ -2085,6 +2086,26 @@ function addImportedObject(obj, dropPoint, label, isGroup) {
 ════════════════════════════════════════════════════════════ */
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
+/* Coordonnées CANVAS (pixels CSS, origine = coin haut-gauche du canvas) d'un
+   évènement souris — l'espace dans lequel `viewportTransform` travaille.
+   `canvas.getPointer(e)` ne convient PAS ici : sans second argument, Fabric
+   applique la transformation inverse du viewport et renvoie des coordonnées
+   DOCUMENT. Passées à zoomAtPoint comme point d'ancrage, elles font dériver la
+   vue à chaque cran (mesuré : 35 px en 5 crans de molette).
+   On refait la géométrie de Fabric plutôt que getPointer(e, true), qui peut
+   resservir le `_pointer` mis en cache par le dernier mouse:move. */
+function canvasPointFromEvent(e) {
+  const el = canvas.upperCanvasEl;
+  const b = el.getBoundingClientRect();
+  const dpr = typeof canvas.getRetinaScaling === 'function' ? canvas.getRetinaScaling() : 1;
+  return {
+    x: (e.clientX - b.left) / dpr * (b.width ? el.width / b.width : 1),
+    y: (e.clientY - b.top) / dpr * (b.height ? el.height / b.height : 1)
+  };
+}
+
+// `point` est en coordonnées CANVAS (voir canvasPointFromEvent) : le point du
+// document situé sous le curseur reste immobile pendant le zoom.
 function zoomAtPoint(point, factor) {
   const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
   state.zoom = clamp(vpt[0] * factor, MIN_ZOOM, MAX_ZOOM);
@@ -6514,7 +6535,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.2.0',
+  version: '2.2.1',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

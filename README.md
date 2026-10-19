@@ -567,6 +567,22 @@ Two bugs worth remembering, both fixed and documented in the code:
   it as a synchronous factory pushed `undefined` into the canvas and broke layer
   rendering; batch duplication goes through `enlivenObjects`.
 
+Two coordinate spaces, and mixing them is silent:
+
+- `canvas.getPointer(e)` returns **document** coordinates (it undoes
+  `viewportTransform`); `canvas.getPointer(e, true)` returns **canvas** pixels.
+  Everything that places or picks an object wants document space — but the zoom
+  anchor wants canvas space. Feeding document coordinates to `zoomAtPoint` made
+  the whole view creep away from the cursor at every wheel tick (35 px over five
+  ticks, measured). `canvasPointFromEvent()` computes the canvas point straight
+  from the event and the canvas rect, also avoiding the `_pointer` cache that
+  `getPointer(e, true)` may replay.
+- Every 1 px stroke is snapped to the **physical** pixel grid, not to `+0.5`
+  CSS: `Math.round(v * dpr) / dpr + 0.5 / dpr` with `lineWidth: 1 / dpr`. The
+  `+0.5` idiom is only correct at DPR 1; at 1.5 (this machine) it blurred the
+  artboard frame across two pixels, and the blur changed at every zoom step, so
+  the frame looked like it drifted.
+
 ### UI invariants, checked before every build
 
 `node scripts/check-ui.mjs` (run in CI before the Astro build) encodes four

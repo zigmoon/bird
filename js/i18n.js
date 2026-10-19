@@ -37,8 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.2.0 — thèmes clair et sombre, bascule jour / nuit':
-      'v2.2.0 — light and dark themes, day / night switch',
+    'v2.2.1 — thèmes clair et sombre, bascule jour / nuit':
+      'v2.2.1 — light and dark themes, day / night switch',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',
@@ -655,8 +655,6 @@
     'Mode nuit': 'Dark mode',
     'Mode jour': 'Light mode',
     'Thème': 'Theme',
-    'v2.2.0 — thèmes clair et sombre, bascule jour / nuit':
-      'v2.2.0 — light and dark themes, day / night switch',
     'Apparence': 'Appearance',
     'SVG · PDF · AI · EPS · PNG · JPG · WEBP · GIF · WEBM':
       'SVG · PDF · AI · EPS · PNG · JPG · WEBP · GIF · WEBM'

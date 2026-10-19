@@ -12,7 +12,7 @@
 'use strict';
 
 var BirdIO = {};
-BirdIO.version = '2.2.0';
+BirdIO.version = '2.2.1';
 BirdIO.libBase = global.BIRD_ASSET_BASE || 'js/';
 
 /* ────────────────────────────────────────────────────────────
