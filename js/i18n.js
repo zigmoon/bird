@@ -37,8 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.3.0 — API d’export unifiée':
-      'v2.3.0 — unified export API',
+    'v2.3.1 — API d’export unifiée':
+      'v2.3.1 — unified export API',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',

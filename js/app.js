@@ -2086,22 +2086,28 @@ function addImportedObject(obj, dropPoint, label, isGroup) {
 ════════════════════════════════════════════════════════════ */
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 
-/* Coordonnées CANVAS (pixels CSS, origine = coin haut-gauche du canvas) d'un
-   évènement souris — l'espace dans lequel `viewportTransform` travaille.
-   `canvas.getPointer(e)` ne convient PAS ici : sans second argument, Fabric
-   applique la transformation inverse du viewport et renvoie des coordonnées
-   DOCUMENT. Passées à zoomAtPoint comme point d'ancrage, elles font dériver la
-   vue à chaque cran (mesuré : 35 px en 5 crans de molette).
-   On refait la géométrie de Fabric plutôt que getPointer(e, true), qui peut
-   resservir le `_pointer` mis en cache par le dernier mouse:move. */
+/* Coordonnées CANVAS d'un évènement souris — l'espace dans lequel
+   `viewportTransform` travaille, c'est-à-dire les PIXELS CSS du canvas.
+   La scène est peinte avec un contexte déjà mis à l'échelle du DPR (voir
+   `_renderBackground`), donc on y dessine en pixels CSS : l'ancre est
+   simplement le décalage depuis le coin du canvas, sans division ni ratio.
+
+   Deux erreurs successives ont été commises ici, d'où ce commentaire :
+
+   1. `canvas.getPointer(e)` sans second argument renvoie des coordonnées
+      DOCUMENT (Fabric défait le viewport). Les passer à `zoomAtPoint` faisait
+      dériver la vue de 35 px en cinq crans de molette.
+   2. Corriger en divisant par `devicePixelRatio` puis en remultipliant par
+      `canvasEl.width / rect.width` corrige DEUX fois : ce ratio vaut déjà
+      ~1/DPR, et il n'est pas exactement égal à l'inverse quand la largeur en
+      pixels physiques est arrondie (1093 × 1,5 = 1639,5 → 1639). L'ancre était
+      alors décalée de 0,2 px, soit 0,03 px de dérive par cran.
+
+   Vérifié : avec le décalage CSS, la dérive est exactement nulle à tous les
+   facteurs de zoom ; avec l'ancien calcul elle vaut -0,027 à -0,067 px. */
 function canvasPointFromEvent(e) {
-  const el = canvas.upperCanvasEl;
-  const b = el.getBoundingClientRect();
-  const dpr = typeof canvas.getRetinaScaling === 'function' ? canvas.getRetinaScaling() : 1;
-  return {
-    x: (e.clientX - b.left) / dpr * (b.width ? el.width / b.width : 1),
-    y: (e.clientY - b.top) / dpr * (b.height ? el.height / b.height : 1)
-  };
+  const b = canvas.upperCanvasEl.getBoundingClientRect();
+  return { x: e.clientX - b.left, y: e.clientY - b.top };
 }
 
 // `point` est en coordonnées CANVAS (voir canvasPointFromEvent) : le point du
@@ -6632,7 +6638,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.3.0',
+  version: '2.3.1',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
