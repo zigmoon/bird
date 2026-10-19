@@ -192,7 +192,52 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      # Les artefacts arrivent dans un dossier par cible. On les aplatit :
+      # une release doit se lire, pas se défricher.
+      - name: Aplatir les artefacts
+        run: |
+          set -e
+          mkdir -p release
+          find artifacts -type f \( \
+            -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+            -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) -print0 |
+            while IFS= read -r -d '' f; do
+              base=$(basename "$f")
+              # Une même release ne peut pas contenir deux fois le même nom.
+              if [ -e "release/$base" ]; then
+                base="${base%.*}-$(echo "$f" | cut -d/ -f2).${base##*.}"
+              fi
+              cp "$f" "release/$base"
+            done
+          ls -lh release
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          name: Bird ${{ github.ref_name }}
+          files: release/*
           generate_release_notes: true
+          body: |
+            ## Télécharger Bird
+
+            | Système | Fichier | Notes |
+            |---|---|---|
+            | **macOS** (Apple Silicon M1–M4) | `Bird_*_aarch64.dmg` | Ouvrir le `.dmg`, glisser Bird dans Applications |
+            | **macOS** (Intel) | `Bird_*_x64.dmg` | idem |
+            | **Windows** | `Bird_*_x64-setup.exe` ou `Bird_*_x64_fr-FR.msi` | L'exe NSIS est le plus simple |
+            | **Linux** | `*.AppImage` | `chmod +x` puis double-clic — aucune installation |
+            | **Linux** (Debian/Ubuntu) | `*.deb` | `sudo apt install ./bird_*.deb` |
+            | **Linux** (Fedora) | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+
+            ### Raccourcis
+            Les raccourcis suivent Adobe (Illustrator) et Figma : `Ctrl` sur Windows et
+            Linux, `⌘` sur macOS. Ils sont portés par le **menu système**, donc actifs
+            même quand le plan de travail n'a pas le focus. `F1` affiche la liste complète.
+
+            ### Versions sans installation
+            Le même moteur tourne dans le navigateur : clonez le dépôt et ouvrez
+            `index.html`, ou `npm run dev` dans `astro/`.
+
+            > Les paquets ne sont pas signés ni notariés (pas de certificat Apple ni de
+            > clé Windows dans ce dépôt). macOS peut demander un clic droit → *Ouvrir*
+            > au premier lancement ; Windows peut afficher SmartScreen.

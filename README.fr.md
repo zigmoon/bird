@@ -492,6 +492,31 @@ Les installeurs macOS et Linux ne peuvent pas être produits depuis Windows :
 `.github/workflows/desktop.yml` les construit sur les runners correspondants, à
 chaque push et à chaque tag `v*`.
 
+### Télécharger
+
+Tout est sur la **[page des releases](https://github.com/zigmoon/bird/releases/latest)**.
+Choisissez le fichier de votre machine :
+
+| Machine | Fichier | Installation |
+|---|---|---|
+| macOS Apple Silicon (M1–M4) | `Bird_*_aarch64.dmg` | ouvrir le `.dmg`, glisser Bird dans *Applications* |
+| macOS Intel | `Bird_*_x64.dmg` | idem |
+| Windows | `Bird_*_x64-setup.exe` | l’exécuter (ou le `.msi` pour un déploiement géré) |
+| Linux, toute distribution | `*.AppImage` | `chmod +x bird-*.AppImage`, puis l’exécuter — rien à installer |
+| Debian / Ubuntu | `*.deb` | `sudo apt install ./bird_*.deb` |
+| Fedora / RHEL | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+
+Les paquets ne sont **ni signés ni notariés** — il n’y a ni certificat Apple ni
+clé de signature Windows dans ce dépôt, et prétendre le contraire ne ferait que
+déplacer l’échec chez l’utilisateur. Conséquences, en entier :
+
+- **macOS** : le premier lancement demande un clic droit → *Ouvrir*, ou
+  `xattr -dr com.apple.quarantine /Applications/Bird.app`.
+- **Windows** : SmartScreen affiche « éditeur inconnu » → *Informations
+  complémentaires* → *Exécuter quand même*.
+- **Linux** : l’AppImage peut nécessiter FUSE 2 (`libfuse2`) sur les
+  distributions récentes ; le `.deb` et le `.rpm` n’ont pas cette contrainte.
+
 ---
 
 ## Développement

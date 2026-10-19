@@ -18,6 +18,15 @@
   <a href="#desktop-builds">Desktop builds</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/zigmoon/bird/releases/latest"><b>⬇ Download for macOS · Windows · Linux</b></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/zigmoon/bird/releases/latest"><img src="https://img.shields.io/github/v/release/zigmoon/bird?label=release" alt="Latest release"></a>
+  <a href="https://github.com/zigmoon/bird/actions/workflows/desktop.yml"><img src="https://github.com/zigmoon/bird/actions/workflows/desktop.yml/badge.svg" alt="Build"></a>
+</p>
+
 ---
 
 ## Why Bird
@@ -405,7 +414,33 @@ npx tauri build --target x86_64-pc-windows-gnu
 they need their own toolchain and code-signing. The GitHub Actions matrix in
 `.github/workflows/desktop.yml` builds all four targets on every `v*` tag — and
 on every push, so a broken bundle is caught immediately — and attaches the
-artefacts to the release:
+artefacts to the release.
+
+### Download
+
+Everything is on the **[releases page](https://github.com/zigmoon/bird/releases/latest)**.
+Pick the file for your machine:
+
+| Your machine | File | Install |
+|---|---|---|
+| macOS, Apple Silicon (M1–M4) | `Bird_*_aarch64.dmg` | open the `.dmg`, drag Bird to *Applications* |
+| macOS, Intel | `Bird_*_x64.dmg` | same |
+| Windows | `Bird_*_x64-setup.exe` | run it (or the `.msi` for managed installs) |
+| Linux, any distro | `*.AppImage` | `chmod +x bird-*.AppImage`, then run it — nothing to install |
+| Debian / Ubuntu | `*.deb` | `sudo apt install ./bird_*.deb` |
+| Fedora / RHEL | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+
+The bundles are **not signed or notarised** — there is no Apple certificate or
+Windows signing key in this repository, and pretending otherwise would just
+move the failure to the user. Consequences, in full:
+
+- **macOS**: the first launch needs right-click → *Open*, or
+  `xattr -dr com.apple.quarantine /Applications/Bird.app`.
+- **Windows**: SmartScreen shows "unknown publisher" → *More info* → *Run anyway*.
+- **Linux**: AppImage may need FUSE 2 (`libfuse2`) on newer distros; the `.deb`
+  and `.rpm` have no such requirement.
+
+### Build matrix
 
 | Platform | Artefact |
 |---|---|
