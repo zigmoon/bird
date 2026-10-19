@@ -92,6 +92,17 @@ crosses, grid, scales. Output as a texture (a fabric.Pattern) or as real vector 
 The interface is English by default. French is available in Preferences (language
 selector). The choice is stored in localStorage under `bird.lang`.
 
+## Theme
+
+Light and dark themes. The moon/sun button left of Preferences toggles them; the
+choice is stored in localStorage under `bird.theme` and applied before first paint.
+Every colour is a CSS custom property in `:root` (46 shades ordered by luminance,
+`--n00` lightest to `--n45` darkest); `html[data-theme="dark"]` redefines only
+those variables, so components invert themselves. Canvas-drawn parts (work area,
+artboard frame, rulers) read `--canvas-*` and `--ruler-*` in JavaScript and repaint
+on the `bird:theme` event. The artboard keeps its own colour: dark mode darkens the
+surround, never the document.
+
 ## Builds
 
 - / : standalone web build (no compilation)

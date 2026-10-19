@@ -11,7 +11,7 @@
  * du dossier de staging (`stage/bird/…`), ce qui produit une arborescence
  * fausse sur le serveur. Ici le nom de chaque entrée est décidé.
  *
- * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.1.3.zip]
+ * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.2.0.zip]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -159,7 +159,7 @@ function listDir(dir) {
 }
 
 const argOut = process.argv.indexOf('--out');
-const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.1.3.zip';
+const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.2.0.zip';
 const outPath = path.isAbsolute(outName) ? outName : path.join(root, outName);
 
 const files = [];

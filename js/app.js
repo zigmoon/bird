@@ -24,6 +24,21 @@ const HIT_R = 9;
 const CURVE_T = 4;
 const PREVIEW = '#1a1a1a'; // tracés d'aperçu (plume, points) : noir, DA monochrome
 
+/* Le canvas ne connaît pas les variables CSS. On les lit une fois par thème et
+   on garde le résultat : getComputedStyle coûterait cher à chaque frame. */
+const THEME_TOKENS = { bg: '--canvas-bg', frame: '--canvas-frame', rulerBg: '--ruler-bg', rulerTick: '--ruler-tick', rulerLabel: '--ruler-label', rulerGuide: '--ruler-guide' };
+let _themeCache = { theme: null, values: {} };
+function themeColor(key, fallback) {
+  const theme = document.documentElement.getAttribute('data-theme') || 'light';
+  if (_themeCache.theme !== theme) _themeCache = { theme: theme, values: {} };
+  if (!(key in _themeCache.values)) {
+    const name = THEME_TOKENS[key];
+    const raw = name ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() : '';
+    _themeCache.values[key] = raw || fallback;
+  }
+  return _themeCache.values[key];
+}
+
 /* ────────────────────────────────────────────────────────────
    ÉTAT GLOBAL
 ──────────────────────────────────────────────────────────── */
@@ -141,7 +156,7 @@ const els = {
   textProps: $('textProps'),
   opacity: $('opacity'), opacityVal: $('opacityVal'),
   artboardColor: $('artboardColor'), artboardSize: $('artboardSize'),
-  dirtyDot: $('dirtyDot'),
+  themeBtn: $('btnTheme'),
   imgInput: $('imgInput'), fileOpen: $('fileOpen'),
   leftSidebar: $('leftSidebar'), rightSidebar: $('rightSidebar')
 };
@@ -180,7 +195,7 @@ function init() {
   // on dessine donc en coordonnées CSS.
   canvas._renderBackground = function (ctx) {
     ctx.save();
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = themeColor('bg', '#ffffff');
     ctx.fillRect(0, 0, this.getWidth(), this.getHeight());
     const vpt = this.viewportTransform || [1, 0, 0, 1, 0, 0];
     const x = vpt[4], y = vpt[5];
@@ -227,7 +242,7 @@ function init() {
     // Léger filé en pointillé définissant le format (discret mais visible).
     const left = snap(x), top = snap(y);
     const right = snap(x + w), bottom = snap(y + h);
-    ctx.strokeStyle = 'rgba(26,26,26,0.22)';
+    ctx.strokeStyle = themeColor('frame', 'rgba(26,26,26,0.22)');
     ctx.lineWidth = 1 / dpr;
     ctx.setLineDash([4, 5]);
     ctx.strokeRect(left, top, right - left, bottom - top);
@@ -3055,9 +3070,22 @@ function mountShellExtras() {
     newBtn.addEventListener('click', () => resetDocument());
   }
   const brand = $('brandHome');
-  if (brand && !brand.dataset.bound) {
-    brand.dataset.bound = '1';
-    brand.addEventListener('click', () => { fitView(); toast('Vue ajustée'); });
+  // Le logo n'est plus une commande : plus de retour à la vue ajustée au clic.
+  // Il reste un repère visuel, sans curseur main ni infobulle d'action.
+  if (brand) { brand.removeAttribute('title'); brand.removeAttribute('role'); }
+
+  // Les règles et le fond du plan sont dessinés au canvas : hors de portée des
+  // variables CSS. On repeint tout au changement de thème.
+  window.addEventListener('bird:theme', () => {
+    _themeCache = { theme: null, values: {} };
+    if (canvas) canvas.requestRenderAll();
+    if (typeof updateRulers === 'function') updateRulers();
+  });
+
+  // Le titre de l'onglet et de la barre native sont construits en JS : ils
+  // échappent au traducteur du DOM, il faut les reconstruire à la bascule.
+  if (window.BirdI18n && window.BirdI18n.onChange) {
+    window.BirdI18n.onChange(() => { if (typeof setDocumentTitle === 'function') setDocumentTitle(state.docName || null); });
   }
 
   if (window.BirdWidgets) {
@@ -4915,7 +4943,8 @@ function bindPages() {
 
 function setDirty(d) {
   state.dirty = d;
-  els.dirtyDot.hidden = !d;
+  // Plus de pastille sur le logo : l'état non enregistré ne s'affiche plus dans
+  // la barre haute (demande : aucun point ni fonction sur le logo).
   if (d) scheduleAutoSave();
 }
 
@@ -5602,14 +5631,19 @@ function nativeShell() {
   return !!(window.BirdNative && BirdNative.ready);
 }
 
-function setDocumentTitle(name) {
+function documentTitle(name) {
   const base = 'Bird ' + (Bird.version || '') + ' — Éditeur vectoriel';
-  document.title = name ? name + ' — ' + base : base;
-  const label = document.querySelector('.brand-name');
-  if (label) label.textContent = name ? name : 'BIRD';
+  const full = name ? name + ' — ' + base : base;
+  return window.BirdI18n ? window.BirdI18n.t(full) : full;
+}
+
+function setDocumentTitle(name) {
+  state.docName = name || null;
+  document.title = documentTitle(name);
   // La barre de titre native ne suit pas `document.title` : on la pilote.
   if (nativeShell() && BirdNative.setTitle) {
-    BirdNative.setTitle(name ? name + ' — Bird' : 'Bird — Éditeur vectoriel');
+    const t = (s) => (window.BirdI18n ? window.BirdI18n.t(s) : s);
+    BirdNative.setTitle(name ? name + ' — Bird' : 'Bird — ' + t('Éditeur vectoriel'));
   }
 }
 
@@ -6191,10 +6225,10 @@ function updateRulers() {
   const draw = (ctx, horizontal) => {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, horizontal ? hw : vw, horizontal ? hh : vh);
-    ctx.fillStyle = '#fbfbfb';
+    ctx.fillStyle = themeColor('rulerBg', '#fbfbfb');
     ctx.fillRect(0, 0, horizontal ? hw : vw, horizontal ? hh : vh);
-    ctx.strokeStyle = '#cfcfcf';
-    ctx.fillStyle = '#8b8b8b';
+    ctx.strokeStyle = themeColor('rulerTick', '#cfcfcf');
+    ctx.fillStyle = themeColor('rulerLabel', '#8b8b8b');
     ctx.lineWidth = 1;
     ctx.font = '8px "IBM Plex Mono", monospace';
     ctx.textBaseline = 'top';
@@ -6225,7 +6259,7 @@ function updateRulers() {
       }
     }
     // Repères
-    ctx.strokeStyle = 'rgba(26,26,26,.75)';
+    ctx.strokeStyle = themeColor('rulerGuide', 'rgba(26,26,26,.75)');
     state.guides.forEach(g => {
       // Une règle horizontale marque les repères verticaux (x), et inversement.
       if (horizontal ? g.axis !== 'x' : g.axis !== 'y') return;
@@ -6480,7 +6514,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.1.3',
+  version: '2.2.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

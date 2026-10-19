@@ -34,10 +34,11 @@
       'Bird — Free vector editor | PDF/AI, SVG import, PDF export',
     'Bird — retour au document': 'Bird — back to document',
     'ÉDITEUR VECTORIEL': 'VECTOR EDITOR',
+'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.1.3 — barre haute plate, états actifs gris':
-      'v2.1.3 — flat top bar, grey active states',
+    'v2.2.0 — thèmes clair et sombre, bascule jour / nuit':
+      'v2.2.0 — light and dark themes, day / night switch',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',
@@ -651,6 +652,12 @@
     'Textures répétées sans raccord : en un objet léger ou en vraies formes vectorielles.':
       'Seamless repeating textures: as a lightweight object or as real vector shapes.',
     'Déposez vos fichiers sur le plan de travail': 'Drop your files on the artboard',
+    'Mode nuit': 'Dark mode',
+    'Mode jour': 'Light mode',
+    'Thème': 'Theme',
+    'v2.2.0 — thèmes clair et sombre, bascule jour / nuit':
+      'v2.2.0 — light and dark themes, day / night switch',
+    'Apparence': 'Appearance',
     'SVG · PDF · AI · EPS · PNG · JPG · WEBP · GIF · WEBM':
       'SVG · PDF · AI · EPS · PNG · JPG · WEBP · GIF · WEBM'
   };
@@ -789,6 +796,12 @@
     var parent = node.parentNode;
     if (skippedText(parent)) return;
     if (node.__birdFr === undefined) node.__birdFr = node.nodeValue;
+    else if (node.nodeValue !== node.__birdFr && node.nodeValue !== translate(node.__birdFr)) {
+      /* Le code applicatif vient d'écrire une NOUVELLE chaîne dans ce nœud
+         (compteur, libellé d'état…) : c'est la nouvelle source. Sans cela le
+         traducteur réimposait indéfiniment la première valeur qu'il avait vue. */
+      node.__birdFr = node.nodeValue;
+    }
     var next = translate(node.__birdFr);
     if (node.nodeValue !== next) {
       suppress++;
@@ -801,7 +814,13 @@
     if (!el || el.nodeType !== 1 || !el.hasAttribute(name)) return;
     if (skipped(el)) return;
     var store = el.__birdAttr || (el.__birdAttr = Object.create(null));
-    if (!(name in store)) store[name] = el.getAttribute(name);
+    var raw = el.getAttribute(name);
+    if (!(name in store)) store[name] = raw;
+    else if (raw !== store[name] && raw !== translate(store[name])) {
+      // Même raison que pour les nœuds de texte : la valeur courante est une
+      // écriture fraîche de l'application, pas une traduction à réappliquer.
+      store[name] = raw;
+    }
     var next = translate(store[name]);
     if (el.getAttribute(name) !== next) {
       suppress++;

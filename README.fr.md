@@ -365,6 +365,34 @@ dans `css/style.css`, `js/app.js` ou `index.html` (écart max-min des canaux > 8
 et la CI l’exécute avant chaque publication. Les exceptions légitimes se
 déclarent en ligne avec `check-ui:allow <raison>`.
 
+### Thème jour / nuit
+
+Le bouton lune / soleil, à gauche des *Préférences*, bascule le thème ; le choix
+est conservé dans `localStorage` sous `bird.theme` et appliqué par un court
+script en ligne dans le `<head>` **avant le premier rendu** : un rechargement en
+thème sombre ne fait donc jamais clignoter l’écran en blanc.
+
+Toute la palette vit à un seul endroit : `:root` définit 46 nuances classées par
+**luminance** (`--n00` la plus claire → `--n45` la plus sombre), et non par rôle
+— dans cette feuille une même nuance sert de fond ici et de bordure là, un nom
+de rôle mentirait. Les composants s’écrivent `background: var(--n00); color:
+var(--n45)` et s’inversent donc d’eux-mêmes ; `html[data-theme="dark"]` ne
+redéfinit que les variables. Le thème clair conserve exactement les littéraux
+d’origine : il est identique au pixel près à la version monochrome précédente.
+
+Trois choses échappent aux variables et demandent un traitement explicite :
+
+* **Le dessin au canvas.** La zone de travail infinie, le cadre pointillé du
+  plan et les règles sont peints au contexte 2D, qui ne lit pas les variables
+  CSS. Ils passent par `themeColor()` dans `js/app.js`, qui lit les propriétés
+  `--canvas-*` et `--ruler-*` (avec cache par thème) et se vide sur l’évènement
+  `bird:theme`.
+* **Le papier.** Le plan de travail garde sa propre couleur (`artColor`, blanc
+  par défaut) : le mode sombre assombrit l’entourage, jamais le document.
+* **Les sources `<img>`.** Un SVG noir chargé par `<img>` ne reçoit pas
+  `currentColor` ; ces images sont inversées par `filter: invert(1)` dans le
+  bloc sombre.
+
 ### Langue de l’interface
 
 **L’anglais est la langue par défaut.** Le français est disponible dans
@@ -421,7 +449,7 @@ bird/
 ### API d’intégration
 
 ```js
-Bird.version                         // '1.7.0'
+Bird.version                         // '2.2.0'
 Bird.document.new()                  // nouveau document
 Bird.document.payload()              // projet sérialisé (tous les plans)
 Bird.document.load(payload)          // ouvre un projet
@@ -441,6 +469,7 @@ Bird.pages.go(1)
 Bird.pages.add('Plan 3')
 
 Bird.view.rulers(true)               // règles / grille / magnétisme
+Bird.theme.get() / .set('dark') / .toggle()   // 'light' | 'dark'
 Bird.view.grid(false)
 Bird.view.snap(true)
 

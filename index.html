@@ -12,14 +12,26 @@
 <meta name="application-name" content="Bird">
 <link rel="canonical" href="https://app.zigmoon.com/bird/">
 <link rel="alternate" type="text/plain" title="LLMs manifest" href="llms.txt">
-<link rel="icon" type="image/svg+xml" href="icons/favicon.svg?v=2.1.3">
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg?v=2.2.0">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/style.css?v=2.1.3">
+<link rel="stylesheet" href="css/style.css?v=2.2.0">
 <style>
   .toolbar { position: relative; }
   .canvas-container { position: relative; }
   .canvas-wrapper { position: relative; }
 </style>
+<script>
+  /* Le thème est décidé AVANT le premier rendu : sans ce bloc, un visiteur en
+     thème sombre verrait la page blanche clignoter le temps du chargement des
+     scripts de fin de <body>. Même clé que js/theme.js. */
+  (function () {
+    try {
+      if (localStorage.getItem('bird.theme') === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (e) { /* navigation privée : on reste en clair */ }
+  })();
+</script>
 </head>
 <body>
 
@@ -31,11 +43,11 @@
       <div class="splash-brand-sub">ÉDITEUR VECTORIEL</div>
     </div>
     <div class="splash-media">
-      <img class="splash-logo-big" src="icons/bird-logo.svg?v=2.1.3" alt="Bird">
+      <img class="splash-logo-big" src="icons/bird-logo.svg?v=2.2.0" alt="Bird">
     </div>
     <div class="splash-info">
       <div class="splash-subtitle">LOCAL-FIRST VECTOR STUDIO</div>
-      <div class="splash-version">v2.1.3 — barre haute plate, états actifs gris</div>
+      <div class="splash-version">v2.2.0 — thèmes clair et sombre, bascule jour / nuit</div>
       <div class="splash-section">
         <div class="splash-label">Créateurs</div>
         <div class="splash-text">Simon Dupont-Gellert</div>
@@ -50,7 +62,7 @@
 <div id="startupOverlay" role="dialog" aria-modal="true" aria-labelledby="startupTitle" hidden>
   <div id="startupPopin">
     <div class="startup-logo">
-      <img src="icons/favicon.svg?v=2.1.3" alt="BIRD">
+      <img src="icons/favicon.svg?v=2.2.0" alt="BIRD">
       <span>BIRD</span>
     </div>
     <h2 class="startup-title" id="startupTitle">Bon retour</h2>
@@ -84,10 +96,9 @@
   <!-- ═══════════ TOP BAR ═══════════ -->
   <header class="topbar">
     <div class="topbar-left">
-      <button class="brand" id="brandHome" type="button" title="Bird — retour au document">
-        <img class="logo" src="icons/bird-mark.svg?v=2.1.3" alt="Bird">
-        <span class="doc-dirty" id="dirtyDot" title="Modifications non enregistrées" hidden>●</span>
-      </button>
+      <div class="brand" id="brandHome">
+        <img class="logo" src="icons/bird-mark.svg?v=2.2.0" alt="Bird">
+      </div>
       <span class="sep"></span>
       <button class="btn btn-square" id="btnNew" title="Nouveau document">+</button>
       <button class="btn btn-square" id="btnOpen" title="Ouvrir un fichier (.plume, SVG, PDF, AI, EPS…)" aria-label="Ouvrir">
@@ -148,6 +159,10 @@
           <button class="export-item export-item--more" data-export="options">Options d’export…</button>
         </div>
       </div>
+      <button class="btn btn-square btn-theme" id="btnTheme" type="button" title="Mode nuit" aria-label="Mode nuit" aria-pressed="false">
+        <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 0 1 9.7 3.5a8.7 8.7 0 1 0 10.8 10.8z"/></svg>
+        <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M18.6 5.4l-1.8 1.8M7.2 16.8l-1.8 1.8"/></svg>
+      </button>
       <button class="btn btn-square btn-gear" id="btnSettings" title="Préférences" aria-label="Préférences">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
       </button>
@@ -165,11 +180,11 @@
           </svg>
         </button>
         <button class="tool" data-tool="pen" title="Plume (P) — clic = sommet, drag = courbe">
-          <img src="icons/pen.svg?v=2.1.3" alt="Plume" class="tool-icon">
+          <img src="icons/pen.svg?v=2.2.0" alt="Plume" class="tool-icon">
         </button>
-        <button class="tool" data-tool="text" title="Texte (T)"><img src="icons/text.svg?v=2.1.3" alt="Texte" class="tool-icon"></button>
+        <button class="tool" data-tool="text" title="Texte (T)"><img src="icons/text.svg?v=2.2.0" alt="Texte" class="tool-icon"></button>
         <button class="tool" data-tool="pencil" title="Crayon (N) — tracé libre">
-          <img src="icons/wave.svg?v=2.1.3" alt="Crayon" class="tool-icon">
+          <img src="icons/wave.svg?v=2.2.0" alt="Crayon" class="tool-icon">
         </button>
         <button class="tool" data-tool="brush" title="Pinceau vectoriel (B)">
           <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.6 4.2 5.2 5.2L9.2 20H4v-5.2Z"/><path d="m12.5 6.3 5.2 5.2"/><path d="M4 20c2.2-2.3 3.1-3.9 2.8-5.2"/></svg>
@@ -188,11 +203,11 @@
           </button>
           <div class="tool-dropdown-menu" id="shapeMenu">
             <button class="dropdown-item" data-tool="rect" title="Rectangle (R)">
-              <img src="icons/rect.svg?v=2.1.3" alt="Rectangle" class="tool-icon">
+              <img src="icons/rect.svg?v=2.2.0" alt="Rectangle" class="tool-icon">
               <span>Rectangle</span>
             </button>
             <button class="dropdown-item" data-tool="ellipse" title="Ellipse (E)">
-              <img src="icons/circle.svg?v=2.1.3" alt="Ellipse" class="tool-icon">
+              <img src="icons/circle.svg?v=2.2.0" alt="Ellipse" class="tool-icon">
               <span>Ellipse</span>
             </button>
             <button class="dropdown-item" data-tool="line" title="Ligne (L)">
@@ -200,7 +215,7 @@
               <span>Ligne</span>
             </button>
             <button class="dropdown-item" data-tool="star" title="Étoile">
-              <img src="icons/star.svg?v=2.1.3" alt="Étoile" class="tool-icon">
+              <img src="icons/star.svg?v=2.2.0" alt="Étoile" class="tool-icon">
               <span>Étoile</span>
             </button>
             <button class="dropdown-item" data-tool="polygon" title="Polygone">
@@ -210,7 +225,7 @@
           </div>
         </div>
         <span class="tool-sep"></span>
-        <button class="tool" data-tool="image" title="Importer une image"><img src="icons/image.svg?v=2.1.3" alt="Image" class="tool-icon"></button>
+        <button class="tool" data-tool="image" title="Importer une image"><img src="icons/image.svg?v=2.2.0" alt="Image" class="tool-icon"></button>
         <span class="tool-sep"></span>
         <button class="tool" data-tool="hand" title="Main / déplacer (H ou Espace)"><svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6"/></svg></button>
         <input type="file" id="imgInput" accept="image/*,.svg,.eps,.webm,.mp4" hidden>
@@ -239,7 +254,7 @@
         </button>
       </div>
       <div class="empty-hint" id="emptyHint">
-        <img class="empty-logo" src="icons/bird-logo-gray.svg?v=2.1.3" alt="" aria-hidden="true" draggable="false">
+        <img class="empty-logo" src="icons/bird-logo-gray.svg?v=2.2.0" alt="" aria-hidden="true" draggable="false">
         <p class="muted">Choisissez un outil et dessinez,<br>ou déposez un fichier — SVG, PDF, AI, EPS.</p>
         <p class="kbd">Plume <kbd>P</kbd> · Sélection <kbd>V</kbd> · Texte <kbd>T</kbd> · Plug-ins <kbd>Ctrl</kbd> <kbd>K</kbd><br>
         Zoom molette · Espace = déplacer · <kbd>Ctrl</kbd>+<kbd>R</kbd> règles</p>
@@ -925,19 +940,20 @@
 <!-- Toast -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="js/fabric.min.js?v=2.1.3"></script>
-<script src="js/paper-full.min.js?v=2.1.3"></script>
-<script src="js/opentype.min.js?v=2.1.3"></script>
-<script src="js/i18n.js?v=2.1.3"></script>
-<script src="js/io.js?v=2.1.3"></script>
-<script src="js/icc.js?v=2.1.3"></script>
-<script src="js/pdfx.js?v=2.1.3"></script>
-<script src="js/vector-tools.js?v=2.1.3"></script>
+<script src="js/fabric.min.js?v=2.2.0"></script>
+<script src="js/paper-full.min.js?v=2.2.0"></script>
+<script src="js/opentype.min.js?v=2.2.0"></script>
+<script src="js/i18n.js?v=2.2.0"></script>
+<script src="js/theme.js?v=2.2.0"></script>
+<script src="js/io.js?v=2.2.0"></script>
+<script src="js/icc.js?v=2.2.0"></script>
+<script src="js/pdfx.js?v=2.2.0"></script>
+<script src="js/vector-tools.js?v=2.2.0"></script>
 <script src="js/history.js?v=3.0.0"></script>
 <script src="js/commands.js?v=3.0.0"></script>
 <script src="js/native.js?v=3.0.0"></script>
 <script src="js/widgets.js?v=3.0.1"></script>
-<script src="js/plugins.js?v=2.1.3"></script>
-<script src="js/app.js?v=2.1.3"></script>
+<script src="js/plugins.js?v=2.2.0"></script>
+<script src="js/app.js?v=2.2.0"></script>
 </body>
 </html>

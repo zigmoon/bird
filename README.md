@@ -336,6 +336,32 @@ own colour palette (the swatches used to paint artwork) is the only exception.
 before every release. Read-only escapes are declared inline with
 `check-ui:allow <reason>`.
 
+### Day / night theme
+
+The moon/sun button left of *Preferences* switches theme; the choice is stored
+in `localStorage` under `bird.theme` and applied by a small inline script in
+`<head>` **before the first paint**, so a dark-theme reload never flashes white.
+
+The whole palette lives in one place: `:root` defines 46 shades ordered by
+**luminance** (`--n00` lightest → `--n45` darkest), not by role — in this
+stylesheet the same shade is a background here and a border there, so a role
+name would lie. Components are written `background: var(--n00); color:
+var(--n45)`, so they invert themselves; `html[data-theme="dark"]` only
+redefines the variables. The light theme holds the exact former literals, so it
+is pixel-identical to the monochrome version that preceded it.
+
+Three things sit outside the variables and need explicit handling:
+
+* **Canvas painting.** The infinite work area, the dashed artboard frame and the
+  rulers are drawn with the 2D context, which cannot read CSS variables. They go
+  through `themeColor()` in `js/app.js`, which reads the `--canvas-*` and
+  `--ruler-*` custom properties (cached per theme) and is invalidated on the
+  `bird:theme` event.
+* **The paper.** The artboard keeps its own colour (`artColor`, white by
+  default): dark mode darkens the surround, never the document.
+* **`<img>` sources.** A black SVG loaded through `<img>` does not receive
+  `currentColor`; those are inverted with `filter: invert(1)` in the dark block.
+
 ### Interface language
 
 **English is the default.** French is available in *Preferences → Interface
@@ -360,6 +386,7 @@ bird/
 ├── icons/                      logo variants, favicon, PWA icons
 ├── js/
 │   ├── i18n.js                 interface language: English default, French option
+│   ├── theme.js                day / night switch (data-theme + localStorage)
 │   ├── fabric.min.js           canvas engine (Fabric.js 5.1)
 │   ├── paper-full.min.js       boolean ops, path maths (Paper.js)
 │   ├── opentype.min.js         font parsing → glyph outlines
@@ -384,7 +411,7 @@ bird/
 ### JavaScript API
 
 ```js
-Bird.version                                   // '1.9.0'
+Bird.version                                   // '2.2.0'
 Bird.document.new() / .payload() / .load(p)
 Bird.document.open(file)                       // any supported format
 Bird.export({ format: 'pdfx', scope: 'document', returnBlob: true })
@@ -393,6 +420,7 @@ Bird.exportSVG({ background: 'transparent' })
 
 Bird.pages.list() / .count() / .go(n) / .add(name) / .duplicate() / .remove(n)
 Bird.view.rulers(true) / .grid(false) / .snap(true)
+Bird.theme.get() / .set('dark') / .toggle()   // 'light' | 'dark'
 Bird.widgets.detach('layers') / .dockAll()
 BirdPlugins.list() / .open(id) / .toggle(id)
 
