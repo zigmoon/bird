@@ -640,13 +640,19 @@ Trois gestes vont ensemble à chaque changement d’asset :
 ### Empaqueter pour un serveur statique
 
 ```bash
-node scripts/pack-ftp.mjs          # → bird-ftp-<version>.zip
+node scripts/pack-ftp.mjs          # → bird-ftp-<version>.zip, tout sous bird/
+node scripts/pack-ftp.mjs --flat   # → fichiers à la racine de l'archive
 ```
 
 Liste blanche, pas « tout sauf » : seuls `index.html`, `manifest.webmanifest`,
 `llms.txt` et les arborescences `css/`, `js/`, `icons/`, `plugins/` entrent dans
-l’archive, sous un unique dossier `bird/`. Rien de `astro/`, `rust/`, `desktop/`,
-`.git` ou `node_modules` ne peut fuiter sur le serveur.
+l’archive. Rien de `astro/`, `rust/`, `desktop/`, `.git` ou `node_modules` ne peut
+fuiter sur le serveur.
+
+Sans `--flat`, tout est rangé sous un unique dossier `bird/` : un seul glisser-
+déposer, quelle que soit la cible. Avec `--flat`, l’archive **est** la racine du
+site (`index.html` à côté de `css/`, `js/`, `icons/`), ce qu’attend un panneau
+d’hébergement qui décompresse une archive au premier niveau.
 
 ---
 

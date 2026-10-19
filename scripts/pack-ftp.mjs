@@ -11,7 +11,11 @@
  * du dossier de staging (`stage/bird/…`), ce qui produit une arborescence
  * fausse sur le serveur. Ici le nom de chaque entrée est décidé.
  *
- * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.2.1.zip]
+ * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.2.2.zip] [--flat]
+ *
+ * --flat dépose les fichiers à la RACINE de l'archive au lieu de les ranger
+ * dans un dossier `bird/` : le zip se décompresse alors directement dans le
+ * premier niveau du serveur web (index.html à côté de css/, js/, icons/).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -159,7 +163,7 @@ function listDir(dir) {
 }
 
 const argOut = process.argv.indexOf('--out');
-const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.2.1.zip';
+const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.2.2.zip';
 const outPath = path.isAbsolute(outName) ? outName : path.join(root, outName);
 
 const files = [];
@@ -180,14 +184,18 @@ for (const dir of DIRS) {
 }
 
 /* Le zip contient un seul dossier `bird/` : un seul glisser-déposer quelle
-   que soit la cible sur le serveur. */
+   que soit la cible sur le serveur. Avec --flat, aucun préfixe : les fichiers
+   se posent au premier niveau du serveur. */
+const FLAT = process.argv.includes('--flat');
+const PREFIX = FLAT ? '' : 'bird/';
+
 const entries = files.map((f) => ({
-  name: 'bird/' + f.name.replace(/\\/g, '/'),
+  name: PREFIX + f.name.replace(/\\/g, '/'),
   data: fs.readFileSync(f.full),
   date: fs.statSync(f.full).mtime
 }));
 entries.push({
-  name: 'bird/.htaccess',
+  name: PREFIX + '.htaccess',
   data: Buffer.from(HTACCESS, 'utf8'),
   date: new Date()
 });

@@ -616,13 +616,18 @@ Three moves go together whenever an asset changes:
 ### Packaging for a static server
 
 ```bash
-node scripts/pack-ftp.mjs          # → bird-ftp-<version>.zip
+node scripts/pack-ftp.mjs                 # → bird-ftp-<version>.zip, everything under bird/
+node scripts/pack-ftp.mjs --flat          # → files at the archive root
 ```
 
 White-listed, not "everything except": only `index.html`, `manifest.webmanifest`,
-`llms.txt` and the `css/`, `js/`, `icons/`, `plugins/` trees go in, under a single
-`bird/` folder. Nothing from `astro/`, `rust/`, `desktop/`, `.git` or
-`node_modules` can leak to the server.
+`llms.txt` and the `css/`, `js/`, `icons/`, `plugins/` trees go in. Nothing from
+`astro/`, `rust/`, `desktop/`, `.git` or `node_modules` can leak to the server.
+
+Without `--flat` everything sits under a single `bird/` folder — one drag and
+drop whatever the target. With `--flat` the archive *is* the site root
+(`index.html` next to `css/`, `js/`, `icons/`), which is what a hosting panel
+that unpacks an archive at the first level expects.
 
 ---
 

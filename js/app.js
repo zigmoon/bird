@@ -6535,7 +6535,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.2.1',
+  version: '2.2.2',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

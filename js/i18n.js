@@ -37,8 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.2.1 — thèmes clair et sombre, bascule jour / nuit':
-      'v2.2.1 — light and dark themes, day / night switch',
+    'v2.2.2 — thèmes clair et sombre, bascule jour / nuit':
+      'v2.2.2 — light and dark themes, day / night switch',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',
@@ -793,11 +793,15 @@
     if (!node || node.nodeType !== 3) return;
     var parent = node.parentNode;
     if (skippedText(parent)) return;
-    if (node.__birdFr === undefined) node.__birdFr = node.nodeValue;
-    else if (node.nodeValue !== node.__birdFr && node.nodeValue !== translate(node.__birdFr)) {
-      /* Le code applicatif vient d'écrire une NOUVELLE chaîne dans ce nœud
-         (compteur, libellé d'état…) : c'est la nouvelle source. Sans cela le
-         traducteur réimposait indéfiniment la première valeur qu'il avait vue. */
+    if (node.__birdFr === undefined) {
+      node.__birdFr = node.nodeValue;
+    } else if (node.nodeValue !== node.__birdOut) {
+      /* Le code applicatif a écrit une NOUVELLE chaîne depuis notre dernier
+         passage (compteur, libellé d'état…) : c'est la nouvelle source.
+         On compare à ce que NOUS avons écrit (`__birdOut`), jamais au résultat
+         de la traduction : comparer à `translate(source)` dans la langue
+         courante prenait la traduction anglaise encore affichée pour une
+         écriture applicative, et le retour au français restait bloqué. */
       node.__birdFr = node.nodeValue;
     }
     var next = translate(node.__birdFr);
@@ -806,17 +810,19 @@
       node.nodeValue = next;
       suppress--;
     }
+    node.__birdOut = node.nodeValue;
   }
 
   function applyAttr(el, name) {
     if (!el || el.nodeType !== 1 || !el.hasAttribute(name)) return;
     if (skipped(el)) return;
     var store = el.__birdAttr || (el.__birdAttr = Object.create(null));
+    var written = el.__birdWritten || (el.__birdWritten = Object.create(null));
     var raw = el.getAttribute(name);
     if (!(name in store)) store[name] = raw;
-    else if (raw !== store[name] && raw !== translate(store[name])) {
-      // Même raison que pour les nœuds de texte : la valeur courante est une
-      // écriture fraîche de l'application, pas une traduction à réappliquer.
+    else if (raw !== written[name]) {
+      // Même raison que pour les nœuds de texte : la valeur courante n'est pas
+      // celle que nous avons posée, donc l'application l'a réécrite.
       store[name] = raw;
     }
     var next = translate(store[name]);
@@ -825,6 +831,7 @@
       el.setAttribute(name, next);
       suppress--;
     }
+    written[name] = el.getAttribute(name);
   }
 
   function applyElement(el) {
@@ -919,6 +926,12 @@
   global.BirdI18n = {
     t: translate,
     apply: applyAll,
+    /* Retraduit UN élément, tout de suite.
+       Les modules qui fabriquent un libellé à la volée écrivent la source
+       française ; sans cet appel, il faudrait attendre le MutationObserver
+       (une micro-tâche) et l'interface afficherait brièvement la mauvaise
+       langue. */
+    applyElement: function (el) { if (el && el.nodeType === 1) applyElement(el); },
     set: function (l) { set(l); },
     get: function () { return lang; },
     languages: LANGS.slice(),

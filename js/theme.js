@@ -35,16 +35,22 @@
 
   /* Le libellé annonce l'action, pas l'état : « Mode nuit » quand on est le
      jour. C'est ce que fait un bouton, et c'est ce qu'on attend d'une bascule
-     dont l'icône montre la destination. */
+     dont l'icône montre la destination.
+
+     On écrit la chaîne FRANÇAISE, jamais sa traduction : le français est la
+     langue source du DOM et c'est `js/i18n.js` qui rend la langue courante.
+     Écrire ici le résultat de `BirdI18n.t()` faisait passer de l'anglais pour
+     une écriture applicative, et le libellé ne revenait plus en français. */
   function syncButton(theme) {
     var btn = document.getElementById('btnTheme');
     if (!btn) return;
-    var toDark = theme !== 'dark';
-    var label = toDark ? 'Mode nuit' : 'Mode jour';
-    if (global.BirdI18n) label = global.BirdI18n.t(label);
+    var label = theme !== 'dark' ? 'Mode nuit' : 'Mode jour';
     btn.setAttribute('title', label);
     btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+    // Application immédiate de la langue courante : sinon le libellé reste
+    // une micro-tâche en français avant que l'observateur ne le traduise.
+    if (global.BirdI18n && global.BirdI18n.applyElement) global.BirdI18n.applyElement(btn);
   }
 
   function apply(theme, silent) {
@@ -85,10 +91,15 @@
     set: set,
     toggle: toggle,
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
-    label: function () { return current() === 'dark' ? 'Mode jour' : 'Mode nuit'; }
+    // Pour les appelants de l'API : la langue courante, pas la source.
+    label: function () {
+      var raw = current() === 'dark' ? 'Mode jour' : 'Mode nuit';
+      return global.BirdI18n ? global.BirdI18n.t(raw) : raw;
+    }
   };
 
-  // La langue peut changer : le libellé du bouton doit suivre.
+  // La langue peut changer : le libellé du bouton doit suivre. `syncButton`
+  // écrit la source française, l'observateur d'i18n applique la langue.
   if (global.BirdI18n && global.BirdI18n.onChange) {
     global.BirdI18n.onChange(function () { syncButton(current()); });
   }

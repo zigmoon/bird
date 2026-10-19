@@ -24,6 +24,8 @@ astro/src/generated/
 *.svg.out
 !icons/*.svg
 
-# Paquet FTP : artefact régénérable, pas une source. Il vit en local pour
-# être déposé sur le serveur, il n'a rien à faire dans l'historique Git.
+# Paquets FTP / web : artefacts régénérables, pas des sources. Ils vivent en
+# local pour être déposés sur le serveur, ils n'ont rien à faire dans
+# l'historique Git.
 bird-ftp-*.zip
+bird-web-*.zip
