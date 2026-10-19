@@ -36,6 +36,8 @@
     'ÉDITEUR VECTORIEL': 'VECTOR EDITOR',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
+    'v2.1.3 — barre haute plate, états actifs gris':
+      'v2.1.3 — flat top bar, grey active states',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',

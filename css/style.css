@@ -240,6 +240,16 @@ button { cursor: pointer; }
 .btn-group-tight .btn:first-child { border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
 .btn-group-tight .btn:last-child { border-top-right-radius: 3px; border-bottom-right-radius: 3px; }
 .btn-group-tight .btn + .btn { border-left: none; }
+/* Les icônes du centre ne sont PAS encadrées (grammaire SuperPrint) : aucun
+   liseré, aucun fond, aucune ombre au repos. Seul l'état actif pose un fond
+   gris plat — voir `.btn.is-on`. Le bord reste présent mais transparent, sinon
+   le bouton perdrait 2 px et sauterait au moment de la bascule. */
+.topbar-center .btn {
+  background: transparent; border-color: transparent; box-shadow: none;
+}
+.topbar-center .btn:hover,
+.topbar-center .btn:active { border-color: transparent; box-shadow: none; }
+.topbar-center .btn:disabled { background: transparent; }
 .toolbar-divider { width: 1px; height: 22px; background: #e9e9e9; margin: 0 3px; flex: 0 0 auto; }
 
 .brand {
@@ -295,17 +305,18 @@ button { cursor: pointer; }
 .btn-square { width: 30px; height: 30px; padding: 0; flex: 0 0 auto; }
 .btn-square > svg { width: 15px; height: 15px; }
 /* État actif d'une bascule (Règles, Grille, Magnétisme).
-   La direction artistique est strictement monochrome : un état actif ne se
-   signale JAMAIS par une teinte — ni bleu, ni vert, ni rouge. Il se lit par
-   un enfoncement : fond gris, bord plus sombre, ombre interne, icône noire.
-   La couleur de texte pilote l'icône via currentColor, donc surtout PAS de
-   `stroke` forcé ici : un trait littéral finit toujours par se retrouver sur
-   un fond de la même couleur (c'est arrivé deux fois). */
+   Grammaire SuperPrint, reprise telle quelle : un fond gris PLAT, sans bord et
+   sans ombre. Aucun relief — pas d'ombre interne, pas de bord plus sombre :
+   c'était un effet 3D que la barre haute ne porte nulle part ailleurs.
+   La direction artistique reste strictement monochrome : un état actif ne se
+   signale jamais par une teinte. La couleur de texte pilote l'icône via
+   currentColor, donc surtout PAS de `stroke` forcé ici : un trait littéral
+   finit toujours par se retrouver sur un fond de la même couleur. */
 .btn.is-on {
-  background: #e2e2e2; border-color: #adadad; color: #1a1a1a;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+  background: rgba(0, 0, 0, .08); border-color: transparent; color: #1a1a1a;
+  box-shadow: none;
 }
-.btn.is-on:hover, .btn.is-on:active { background: #d9d9d9; border-color: #9e9e9e; }
+.btn.is-on:hover, .btn.is-on:active { background: rgba(0, 0, 0, .13); border-color: transparent; }
 .btn-primary {
   background: #1a1a1a; color: #fff; border-color: #1a1a1a;
   font-weight: 700; letter-spacing: 1.2px;
