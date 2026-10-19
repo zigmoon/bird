@@ -31,6 +31,9 @@ struct ShellState {
     /// Commandes dont le menu natif possède réellement le raccourci.
     /// Le web s'en sert pour ne pas rejouer la même touche deux fois.
     menu_commands: Mutex<Vec<String>>,
+    /// Fichier reçu au lancement (double-clic sur un .plume) ou par
+    /// l'événement « Ouvrir avec » de macOS. Consommé une seule fois.
+    pending_file: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -48,6 +51,12 @@ fn app_info(state: tauri::State<'_, ShellState>) -> AppInfo {
         platform: std::env::consts::OS.to_string(),
         menu: state.menu_commands.lock().map(|m| m.clone()).unwrap_or_default(),
     }
+}
+
+/// Fichier à ouvrir au démarrage (association de fichiers), ou `null`.
+#[tauri::command]
+fn pending_file(state: tauri::State<'_, ShellState>) -> Option<String> {
+    state.pending_file.lock().ok().and_then(|mut slot| slot.take())
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -298,11 +307,12 @@ fn build_menu<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ShellState::default())
         .invoke_handler(tauri::generate_handler![
             app_info,
+            pending_file,
             read_text_file,
             write_text_file,
             write_binary_file,
@@ -313,6 +323,17 @@ fn main() {
             let handle = app.handle().clone();
             let menu = build_menu(&handle)?;
             app.set_menu(menu)?;
+
+            // Double-clic sur un .plume / .bird : le chemin arrive en argv.
+            if let Some(path) = std::env::args().nth(1) {
+                if std::path::Path::new(&path).is_file() {
+                    if let Some(state) = app.try_state::<ShellState>() {
+                        if let Ok(mut slot) = state.pending_file.lock() {
+                            *slot = Some(path);
+                        }
+                    }
+                }
+            }
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -333,6 +354,26 @@ fn main() {
                 eprintln!("[bird] commande {id} non transmise : {err}");
             }
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("erreur au lancement de Bird");
+
+    app.run(|app, event| {
+        // macOS ne passe pas les fichiers en argv : il émet « Ouvrir avec ».
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    if let Some(state) = app.try_state::<ShellState>() {
+                        if let Ok(mut slot) = state.pending_file.lock() {
+                            *slot = Some(path.to_string_lossy().to_string());
+                        }
+                    }
+                    let _ = app.emit("bird://open-file", path.to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        let _ = (app, event);
+    });
 }

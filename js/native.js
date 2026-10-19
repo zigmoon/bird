@@ -126,6 +126,20 @@ function onCommand(fn) {
   if (typeof fn === 'function') state.handlers.push(fn);
 }
 
+/** Abonnement à « Ouvrir avec » (macOS) : un fichier arrive après le lancement. */
+function onOpenFile(fn) {
+  const api = tauri();
+  if (!api || !api.event || typeof fn !== 'function') return;
+  api.event.listen('bird://open-file', (event) => {
+    if (event && event.payload) fn(String(event.payload));
+  });
+}
+
+/** Fichier passé au lancement (double-clic sur un .plume), ou null. */
+function pendingFile() {
+  return invoke('pending_file').catch(() => null);
+}
+
 /** Le menu natif gère-t-il déjà le raccourci de cette commande ? */
 function ownsCommand(id) { return state.menuCommands.has(id); }
 
@@ -212,6 +226,8 @@ function basename(path) { return String(path || '').split(/[\\/]/).pop() || ''; 
 global.BirdNative = {
   init,
   onCommand,
+  onOpenFile,
+  pendingFile,
   ownsCommand,
   openFile,
   saveFile,

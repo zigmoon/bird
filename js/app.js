@@ -3005,6 +3005,10 @@ async function detectNativeShell() {
 
   Bird.native = info.info || {};
   BirdNative.onCommand(runNativeCommand);
+  /* Association de fichiers : un .plume double-cliqué arrive soit en argv
+     (Windows/Linux), soit par « Ouvrir avec » (macOS). */
+  BirdNative.onOpenFile(openNativePath);
+  BirdNative.pendingFile().then((path) => { if (path) openNativePath(path); }).catch(() => {});
   renderShortcuts();
 
   const version = (info.info && info.info.version) || Bird.version || '';
@@ -5659,6 +5663,28 @@ async function openProject() {
       projectPath = null;
       setDocumentTitle(picked.name);
       await importFile(new File([picked.bytes], picked.name));
+    }
+  } catch (err) {
+    toast('Ouverture impossible : ' + (err && err.message || err), true);
+  }
+}
+
+/* Ouvre un chemin connu sans dialogue : double-clic sur un fichier associé,
+   « Ouvrir avec » sur macOS, ou ligne de commande. */
+async function openNativePath(path) {
+  if (!path) return;
+  const name = BirdNative.basename(path);
+  try {
+    if (/\.(png|jpe?g|webp|gif|bmp|avif|pdf|ai|eps|svgz)$/i.test(name)) {
+      const bytes = await BirdNative.readBinary(path);
+      projectPath = null;
+      setDocumentTitle(name);
+      await importFile(new File([bytes], name));
+    } else {
+      const text = await BirdNative.readText(path);
+      openFileContent(text, name);
+      projectPath = /\.(plume|bird|json)$/i.test(name) ? path : null;
+      setDocumentTitle(name);
     }
   } catch (err) {
     toast('Ouverture impossible : ' + (err && err.message || err), true);
