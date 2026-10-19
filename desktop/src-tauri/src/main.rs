@@ -59,6 +59,13 @@ fn pending_file(state: tauri::State<'_, ShellState>) -> Option<String> {
     state.pending_file.lock().ok().and_then(|mut slot| slot.take())
 }
 
+/// Le titre de la fenêtre suit le document ouvert. Tauri ne le fait pas
+/// automatiquement quand `document.title` change dans le webview.
+#[tauri::command]
+fn set_window_title(window: tauri::WebviewWindow, title: String) {
+    let _ = window.set_title(&title);
+}
+
 /* ════════════════════════════════════════════════════════════
    FICHIERS — le dialogue est côté web (`plugin:dialog|open`), la
    lecture/écriture est ici. Deux raisons : aucune configuration de
@@ -313,6 +320,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             pending_file,
+            set_window_title,
             read_text_file,
             write_text_file,
             write_binary_file,

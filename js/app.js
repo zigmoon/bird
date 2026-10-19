@@ -3013,6 +3013,7 @@ async function detectNativeShell() {
 
   const version = (info.info && info.info.version) || Bird.version || '';
   document.title = 'Bird ' + version + ' — Éditeur vectoriel';
+  BirdNative.setTitle('Bird — Éditeur vectoriel');
   const versionNode = document.querySelector('.settings-version');
   if (versionNode) versionNode.textContent = 'Bird ' + version + ' · ' + platform;
 }
@@ -5592,6 +5593,10 @@ function setDocumentTitle(name) {
   document.title = name ? name + ' — ' + base : base;
   const label = document.querySelector('.brand-name');
   if (label) label.textContent = name ? name : 'BIRD';
+  // La barre de titre native ne suit pas `document.title` : on la pilote.
+  if (nativeShell() && BirdNative.setTitle) {
+    BirdNative.setTitle(name ? name + ' — Bird' : 'Bird — Éditeur vectoriel');
+  }
 }
 
 async function saveFile(opts) {

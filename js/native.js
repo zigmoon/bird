@@ -167,8 +167,7 @@ async function pickSave(defaultPath, kind) {
 }
 
 /* ── Fichiers ── */
-function readText(path) { return invoke('read_text_file', { path }); }
-function writeText(path, contents) { return invoke('write_text_file', { path, contents }); }
+function readText(path) { return invoke('read_text_file', { path }); }function writeText(path, contents) { return invoke('write_text_file', { path, contents }); }
 function readBinary(path) { return invoke('read_binary_file', { path }).then(base64ToBytes); }
 function writeBinary(path, bytes) {
   return invoke('write_binary_file', { path, base64: bytesToBase64(bytes) });
@@ -223,6 +222,11 @@ async function writeTo(path, data) {
 
 function basename(path) { return String(path || '').split(/[\\/]/).pop() || ''; }
 
+/** Titre de la fenêtre native : Tauri ne suit pas `document.title`. */
+function setTitle(title) {
+  return invoke('set_window_title', { title: String(title || 'Bird') }).catch(() => {});
+}
+
 global.BirdNative = {
   init,
   onCommand,
@@ -239,6 +243,7 @@ global.BirdNative = {
   pickOpen,
   pickSave,
   basename,
+  setTitle,
   bytesToBase64,
   base64ToBytes,
   get available() { return state.available; },
