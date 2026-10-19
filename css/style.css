@@ -306,8 +306,8 @@ button { cursor: pointer; }
   font-weight: 700; letter-spacing: 1.2px;
 }
 .btn-primary:hover { background: #333; border-color: #333; }
-.btn-ai { border-color: #1a1a1a; font-weight: 700; }
-.btn-ai svg { fill: currentColor; stroke: none; }
+.btn-ai { border-color: #1a1a1a; }
+.btn-ai svg { fill: none; stroke: currentColor; }
 .btn.mini { width: 28px; height: 26px; padding: 0; font-size: 11px; }
 .btn.mini.danger { color: #1a1a1a; }
 .btn.mini.danger:hover { background: #f5f5f5; border-color: #d0d0d0; }
@@ -553,12 +553,14 @@ kbd {
 .props.collapsed .props-dots { display: block; opacity: .75; letter-spacing: 1px; }
 .props.collapsed .props-header:hover .props-dots { opacity: 1; }
 
-/* Icônes de section visibles quand rétractée */
+/* Icônes de section visibles quand rétractée.
+   Symétrie avec le rail d'outils de gauche : 40 px de haut, 2 px d'écart,
+   8 px de marge — les deux colonnes se répondent au pixel. */
 .rightbar-icons {
   display: none;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 4px;
+  padding: 8px 6px;
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -567,13 +569,21 @@ kbd {
 .rightbar-icons::-webkit-scrollbar { width: 0; height: 0; }
 .rightbar-icon-btn {
   width: 100%;
-  height: 34px;
-  flex: 0 0 auto;
+  height: 40px;
+  flex: 0 0 40px;
   display: flex; align-items: center; justify-content: center;
+  position: relative;
   background: transparent; border: none; border-radius: 4px;
   color: #1a1a1a; opacity: 0.6;
-  font-size: 17px; cursor: pointer;
+  font-size: 18px; cursor: pointer;
   transition: opacity .15s, background .15s;
+}
+/* Marqueur discret : cette section vit dans un panneau flottant. */
+.rightbar-icon-btn.has-widget::after {
+  content: '';
+  position: absolute; right: 6px; bottom: 6px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #1677ff;
 }
 .rightbar-icon-btn:hover { opacity: 1; background: #f5f5f5; }
 .rightbar-icon-btn.active { opacity: 1; background: #f0f0f0; }
@@ -614,6 +624,9 @@ kbd {
 }
 .section-action:hover { background: #f2f2f2; color: #1a1a1a; border-color: #e6e6e6; }
 .section-action svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Le détachement est une action, pas un ornement : il reste visible. */
+.section-detach { opacity: .7; }
+.section-head:hover .section-detach { opacity: 1; color: #1a1a1a; }
 .section-note {
   margin: 0 0 8px; font-size: 9px; line-height: 1.5; color: #999;
 }
@@ -1098,6 +1111,17 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .sp-widget.is-collapsed { max-height: 32px; }
 .sp-widget.is-dragging { box-shadow: 0 18px 46px rgba(0,0,0,.24); }
+/* Apparition et rappel : deux micro-animations, 180 et 520 ms. */
+.sp-widget.is-entering { animation: spWidgetIn .18s cubic-bezier(.2,.7,.2,1); }
+@keyframes spWidgetIn {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+.sp-widget.is-pulse { animation: spWidgetPulse .5s ease-out; }
+@keyframes spWidgetPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(22,119,255,.35), 0 10px 30px rgba(0,0,0,.16); }
+  100% { box-shadow: 0 0 0 10px rgba(22,119,255,0), 0 10px 30px rgba(0,0,0,.16); }
+}
 .sp-widget-head {
   display: flex; align-items: center; gap: 6px;
   height: 32px; padding: 0 6px 0 9px;
@@ -1127,24 +1151,15 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .sp-widget.is-collapsed .sp-widget-body { display: none; }
 .sp-widget-body .field-row:last-child { margin-bottom: 0; }
+/* La section déplacée garde ses contrôles ; on retire seulement les marges
+   de panneau, sinon le widget hérite d'espacements prévus pour 250 px fixes. */
+.sp-widget-body .props-section.is-floating,
+.props-section.is-floating { padding: 0; margin: 0; border: 0; background: none; }
+.sp-widget-body .props-section.is-floating > .section-head { display: none; }
+.sp-widget-body .props-section.is-floating > .section-note { margin-top: 0; }
 
-/* Liste des widgets dans le panneau */
-.widgets-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
-.widgets-empty { font-size: 9.5px; color: #aaa; padding: 6px 2px; }
-.widget-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 5px; border-radius: 3px;
-  font-size: 10px; color: #333;
-}
-.widget-row:hover { background: #f6f6f6; }
-.widget-row .widget-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.widget-row .widget-state { font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: #1677ff; }
-.widget-row .widget-state.is-docked { color: #bbb; }
-.widget-row button {
-  width: 20px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 3px;
-  background: transparent; color: #888; cursor: pointer;
-}
-.widget-row button:hover { background: #eee; color: #1a1a1a; border-color: #e2e2e2; }
+/* Liste des widgets — supprimée : les sections SONT les widgets.
+   Il n'y a plus de liste à maintenir en double. */
 
 /* ═══════════════════════════════════════════════════════════════
    PLUG-INS

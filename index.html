@@ -14,7 +14,7 @@
 <link rel="alternate" type="text/plain" title="LLMs manifest" href="llms.txt">
 <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/style.css?v=1.9.0">
+<link rel="stylesheet" href="css/style.css?v=2.0.0">
 <style>
   .toolbar { position: relative; }
   .canvas-container { position: relative; }
@@ -36,7 +36,7 @@
     </div>
     <div class="splash-info">
       <div class="splash-subtitle">LOCAL-FIRST VECTOR STUDIO</div>
-      <div class="splash-version">v1.9 — PDF/X-1a · CMJN · texte en courbes</div>
+      <div class="splash-version">v2.0 — panneaux détachables · historique incrémental</div>
       <div class="splash-section">
         <div class="splash-label">Créateurs</div>
         <div class="splash-text">Simon Dupont-Gellert</div>
@@ -132,12 +132,8 @@
       <button class="btn btn-square" id="btnVectorTools" type="button" title="Outils vectoriels" aria-label="Outils vectoriels">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8.3 8.7 20 20"/><path d="M8.3 15.3 20 4"/></svg>
       </button>
-      <button class="btn btn-square" id="btnPlugins" type="button" title="Plug-ins" aria-label="Plug-ins">
-        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.5h6v4h4v6h-4v7H9v-7H5v-6h4z"/></svg>
-      </button>
-      <button class="btn btn-ai" id="btnAI" title="Créer un dessin vectoriel avec l’IA" aria-haspopup="dialog">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 1.2 4.1L15 7.5l-3.8 1.4L10 13l-1.2-4.1L5 7.5l3.8-1.4L10 2Z"/><path d="m16 12 .7 2.3L19 15l-2.3.7L16 18l-.7-2.3L13 15l2.3-.7L16 12Z"/></svg>
-        <span>IA</span>
+      <button class="btn btn-square btn-ai" id="btnAI" title="Créer un dessin vectoriel avec l’IA" aria-label="Créer avec l’IA" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m11 3 1.6 5.1L18 9.7l-5.4 1.6L11 16.4l-1.6-5.1L4 9.7l5.4-1.6L11 3Z"/><path d="M18.5 15.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6Z"/></svg>
       </button>
     </div>
 
@@ -623,15 +619,6 @@
           <input type="file" id="pluginFile" accept=".js,text/javascript" hidden>
         </div>
 
-        <div class="props-section" data-section="widgets" id="section-widgets">
-          <h3>Widgets</h3>
-          <p class="section-note">Chaque panneau peut être détaché pour flotter sur le plan de travail.</p>
-          <div class="widgets-list" id="widgetsList"></div>
-          <div class="btn-row">
-            <button class="btn" id="widgetsReset" title="Replacer tous les widgets">Réinitialiser</button>
-          </div>
-        </div>
-
         <div class="props-foot">
           <button class="btn btn-ghost wide" id="btnClear">Tout effacer</button>
         </div>
@@ -917,15 +904,16 @@
 <!-- Toast -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="js/fabric.min.js?v=1.9.0"></script>
-<script src="js/paper-full.min.js?v=1.9.0"></script>
-<script src="js/opentype.min.js?v=1.9.0"></script>
-<script src="js/io.js?v=1.9.0"></script>
-<script src="js/icc.js?v=1.9.0"></script>
-<script src="js/pdfx.js?v=1.9.1"></script>
-<script src="js/vector-tools.js?v=1.9.0"></script>
-<script src="js/widgets.js?v=1.9.0"></script>
-<script src="js/plugins.js?v=1.9.0"></script>
-<script src="js/app.js?v=1.9.0"></script>
+<script src="js/fabric.min.js?v=2.0.0"></script>
+<script src="js/paper-full.min.js?v=2.0.0"></script>
+<script src="js/opentype.min.js?v=2.0.0"></script>
+<script src="js/io.js?v=2.0.0"></script>
+<script src="js/icc.js?v=2.0.0"></script>
+<script src="js/pdfx.js?v=2.0.0"></script>
+<script src="js/vector-tools.js?v=2.0.0"></script>
+<script src="js/history.js?v=2.0.0"></script>
+<script src="js/widgets.js?v=2.0.0"></script>
+<script src="js/plugins.js?v=2.0.0"></script>
+<script src="js/app.js?v=2.0.0"></script>
 </body>
 </html>

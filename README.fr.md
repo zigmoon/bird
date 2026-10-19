@@ -102,10 +102,10 @@ Chaque section possède un bouton **détacher**. Une fois détachée :
 
 - la section devient une **carte flottante** au-dessus du plan de travail ;
 - elle se déplace en glissant son en-tête, se replie, se referme (retour au panneau) ;
-- sa position est **mémorisée** (`localStorage`, clé `bird_widgets_v1`) ;
+- sa position est **mémorisée** (`localStorage`, clé `bird_widgets_v2`) ;
 - elle **continue de fonctionner à l’identique** : c’est le même nœud DOM qui est déplacé, pas une copie. Aucun écouteur n’est perdu.
 
-La section *Widgets* liste tous les panneaux avec leur état (*Ancré* / *Détaché*) ; `•••` de l’en-tête referme le panneau, le bouton ↧ de l’en-tête rattache tout d’un coup.
+Aucune liste de widgets séparée : **ce sont les sections existantes** du panneau qui se détachent. L’icône de la section dans le rail porte un point bleu tant que son widget flotte, et un clic la ramène au premier plan. `•••` de l’en-tête replie le panneau, le bouton ↧ rattache tout d’un coup.
 
 ```js
 Bird.widgets.detach('layers');   // détache le panneau Calques
@@ -113,6 +113,40 @@ Bird.widgets.dock('layers');     // le rattache
 Bird.widgets.dockAll();          // tout rattacher
 Bird.widgets.reset();            // positions et états d'origine
 Bird.widgets.list();             // ['appearance', 'shape', …]
+```
+
+---
+
+## Historique incrémental
+
+Instantané complet à chaque pas = désastre dès qu’une image entre dans le
+document : 60 pas d’annulation sur une image de 2 Mo, c’est 120 Mo pour un objet
+qui n’a jamais bougé.
+
+Bird stocke une **carte `id d’objet → JSON de l’objet`**. Deux états successifs
+partagent la **même chaîne** pour tout objet inchangé : une modification ne coûte
+que les objets réellement touchés.
+
+| Scénario | Instantanés complets | Bird 2.0 |
+|---|---|---|
+| 30 rectangles, 30 pas d’annulation | ~1 Mo | **33 Ko** |
+| + une image de 400 Ko | +400 Ko *par pas* | **+400 Ko une fois** |
+| + 20 déplacements d’un rectangle | +660 Ko | **+21 Ko** |
+
+Un historique entier finit par coûter le prix d’**un seul** instantané classique.
+
+- Les objets sérialisés portent un `birdId` stable : l’identité survit à un
+  aller-retour, donc le partage continue de fonctionner après un undo/redo.
+- La purge est bornée en **octets** autant qu’en nombre de pas : 80 états *ou*
+  64 Mo, au premier atteint.
+- L’infobulle d’`Annuler` affiche le poids réel (`Ctrl+Z` — 12 états, 84 Ko).
+- undo/redo est verrouillé pendant la reconstruction du document : un double
+  `Ctrl+Z` rapide ne peut pas enregistrer le canvas vide que Fabric expose en
+  cours de chargement.
+
+```js
+Bird.document.history();   // { undo, redo, bytes, readable, limit, budget, cached }
+Bird.document.edit((canvas) => { /* … */ }, 'Libellé');  // une entrée d'annulation sûre
 ```
 
 ---
@@ -175,7 +209,7 @@ Deux champs consécutifs portant `row` vont côte à côte. `ui.preview: false` 
 ### Cycle de vie
 
 1. **Installation** — bouton *Installer…* : le fichier est lu, son `id` extrait, le manifeste enregistré (`localStorage`, `bird_plugins_v1`).
-2. **Activation** — interrupteur du panneau *Plug-ins* : le script est évalué, une **icône apparaît dans la barre d’outils centrée**.
+2. **Activation** — interrupteur du panneau *Plug-ins* : le script est évalué et le plug-in s’ouvre depuis le panneau **Plug-ins** du rail de droite. La barre d’outils haute reste volontairement sans icône de plug-in : un bouton par extension ne passerait pas l’échelle.
 3. **Utilisation** — clic sur l’icône ou *Utiliser* : le tiroir de réglages s’ouvre, l’aperçu se met à jour à chaque frappe, `APPLIQUER` écrit dans le document.
 4. **Retrait** — bouton *Retirer* sur les plug-ins installés.
 
@@ -272,7 +306,7 @@ Bird.pages.move(3, -1)
 
 - **Annuler / rétablir** couvre les créations, déplacements, rotations, réglages du panneau, verrouillage, plug-ins.
 - **Sauvegarde automatique** dans `localStorage` et bascule automatique vers **IndexedDB** au-delà de 4,2 Mo (images embarquées).
-- Historique limité à 60 états, transactions coalescées pour les réglages continus.
+- Historique **incrémental** borné par 80 états *ou* 64 Mo, au premier atteint ; les réglages continus sont coalescés en une seule entrée.
 - Tout le contenu importé est **nettoyé** : scripts, `foreignObject`, gestionnaires `on*`, références externes.
 
 ---
@@ -325,6 +359,7 @@ bird/
 │   ├── paper-full.min.js      Pathfinder et conversion en chemins (Paper.js)
 │   ├── io.js                  échange : SVG, PDF/AI, EPS, export PDF, IndexedDB
 │   ├── eps-import.js          interpréteur PostScript (Illustrator niveau 2)
+│   ├── history.js             historique incrémental (interning d’objets, budget en octets)
 │   ├── widgets.js             panneaux détachables (carte flottante + mémoire)
 │   ├── plugins.js             hôte de plug-ins : registre, tiroir, API
 │   ├── pdf.min.js             lecture PDF (pdf.js 3.11, chargé à la demande)
@@ -426,13 +461,13 @@ Les préférences d’interface (widgets détachés, plug-ins actifs, réglages 
 - [x] Multi-plans de travail / pages
 - [x] Import PDF multi-pages avec sélecteur de page
 - [x] Export PDF multi-plans
-- [ ] Texte PDF vraiment vectoriel (embarquement de polices ou conversion en courbes)
-- [ ] Export PDF/X-1a, CMJN et profils ICC
-- [ ] Dégradés PDF réels (shadings axiaux/radiaux)
-- [ ] Contour de trait, décalage de tracé, simplification, symboles, blend tool
-- [ ] Historique incrémental (alléger les instantanés avec images)
+- [x] Texte PDF vraiment vectoriel (embarquement de polices et conversion en courbes)
+- [x] Export PDF/X-1a, CMJN et profils ICC
+- [x] Dégradés PDF réels (shadings axiaux/radiaux)
+- [x] Contour de trait, décalage de tracé, simplification, symboles, blend tool
+- [x] Historique incrémental (interning d’objets, budget en octets)
+- [x] Version desktop Tauri (macOS, Windows, Linux)
 - [ ] Rendu WebGL / OffscreenCanvas pour les gros documents
-- [ ] Version desktop Tauri s’appuyant sur `bird-core`
 - [ ] Tests Playwright de non-régression visuelle
 - [ ] Collaboration local-first (CRDT) et gestion de versions
 - [ ] i18n et accessibilité complète

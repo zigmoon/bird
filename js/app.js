@@ -13,7 +13,7 @@ const LS_META_KEY = 'bird_meta_v3';
 const IDB_KEY = 'current';
 const LEGACY_LS_KEY = 'plume_doc_v1';
 const PROJECT_VERSION = 3;
-const SERIALIZED_PROPS = ['_plumeData', 'name', 'birdLocked', 'birdHidden', '_birdShape'];
+const SERIALIZED_PROPS = ['_plumeData', 'name', 'birdId', 'birdLocked', 'birdHidden', '_birdShape'];
 const AI_SESSION_KEY = 'bird_openrouter_key';
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 64;
@@ -410,6 +410,7 @@ function resetDocument() {
   canvas.discardActiveObject();
   state.undo = [];
   state.redo = [];
+  if (history) history.reset();
   state.guides = [];
   // Un nouveau document repart d'un seul plan, au format courant.
   state.pages = [{ id: newPageId(), name: 'Plan 1', w: state.artboardW, h: state.artboardH, color: state.artboardColor, json: null }];
@@ -2135,35 +2136,110 @@ function endPan() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   HISTORIQUE (UNDO / REDO)
+   HISTORIQUE (UNDO / REDO) — incrémental
+   ────────────────────────────────────────────────────────────
+   Un état n'est plus un document complet mais une carte
+   « id d'objet → JSON ». Les objets inchangés partagent la même
+   chaîne entre deux états : modifier une forme dans un document de
+   300 objets ne coûte que cette forme, pas les 299 autres.
+   Voir js/history.js.
 ════════════════════════════════════════════════════════════ */
 function canvasJSON() { return canvas.toJSON(SERIALIZED_PROPS); }
+
+const history = window.BirdHistory
+  ? BirdHistory.create({
+    readObjects: () => canvas.getObjects(),
+    properties: SERIALIZED_PROPS,
+    header: () => ({ version: fabric.version, background: canvas.backgroundColor || '' })
+  })
+  : null;
+
+const HISTORY_LIMIT = 80;                       // états (nombre)
+const HISTORY_BUDGET = 64 * 1024 * 1024;        // états (octets, partagés)
+
+function captureState() {
+  return history ? history.capture() : canvasJSON();
+}
+
+/* `loadJSON` est asynchrone (fabric « enlivène » les objets). Entre le
+   `canvas.clear()` et la fin du chargement, le document est VIDE : toute
+   capture faite à cet instant enregistrerait un document vide dans la pile
+   opposée. On verrouille donc undo/redo pendant la restauration. */
+let _restoring = false;
+
+/* INVARIANT : le sommet de `state.undo` est toujours l'état ANTÉRIEUR de la
+   dernière opération, jamais l'état courant. `_current` retient l'état
+   courant pour ne pas le recapturer à chaque frappe. Les deux ne sont
+   qu'une référence : aucun octet dupliqué. */
+let _current = null;
+
+function currentState() {
+  if (!_current) _current = captureState();
+  return _current;
+}
+
+function invalidateCurrent() { _current = null; }
+
+function restoreState(snapshot) {
+  if (!history) return loadJSON(snapshot);
+  const plain = history.materialize(snapshot);
+  return plain ? loadJSON(plain) : Promise.resolve();
+}
+
+/* Pousse un état et applique la double limite (nombre + octets). */
+function pushHistory(snapshot) {
+  state.undo.push(snapshot);
+  BirdHistory.trim(state.undo, HISTORY_LIMIT, HISTORY_BUDGET, historyBytes);
+  updateUndoUI();
+}
+
+function historyBytes() {
+  return history ? history.bytesOf(state.undo, state.redo) : 0;
+}
+
+function clearRedo() { state.redo = []; }
+
+/* Vide les piles sans toucher au cache d'objets : les instantanés déjà
+   retenus (autres plans de travail) continuent de partager leurs chaînes. */
+function resetStacks() {
+  state.undo = [];
+  state.redo = [];
+  invalidateCurrent();
+  updateUndoUI();
+}
+
+/* Nouveau document : là, tout le cache devient inutile. */
+function clearHistory() {
+  state.undo = [];
+  state.redo = [];
+  if (history) history.reset();
+  invalidateCurrent();
+  updateUndoUI();
+}
 
 // Transaction : capture l'état AVANT la mutation pour que undo restaure l'état
 // précédent (essentiel pour les ajouts d'objets).
 let _txn = null;
 function beginTxn() {
-  if (!_txn) _txn = { before: canvasJSON() };
+  if (!_txn) _txn = { before: currentState() };
   return _txn;
 }
 function commitUndo(label) {
-  if (_txn) {
-    state.undo.push(_txn.before);
-    _txn = null;
-  } else {
-    state.undo.push(canvasJSON());
-  }
-  if (state.undo.length > 60) state.undo.shift();
-  state.redo = [];
-  updateUndoUI();
+  const before = _txn ? _txn.before : currentState();
+  _txn = null;
+  pushHistory(before);
+  invalidateCurrent();
+  clearRedo();
 }
-function cancelTxn() { _txn = null; }
+function cancelTxn() { _txn = null; invalidateCurrent(); }
 
+/* `pushUndo` s'appelle AVANT la mutation : il enregistre l'état courant tel
+   quel comme état antérieur. Il ne consomme pas une transaction ouverte, pour
+   qu'un `beginTxn` en cours ne soit pas perdu. */
 function pushUndo(label) {
-  state.undo.push(canvasJSON());
-  if (state.undo.length > 60) state.undo.shift();
-  state.redo = [];
-  updateUndoUI();
+  pushHistory(currentState());
+  invalidateCurrent();
+  clearRedo();
 }
 
 /* Les réglages du panneau (couleur, opacité, épaisseur…) arrivent par rafales.
@@ -2171,7 +2247,7 @@ function pushUndo(label) {
 let _propTxn = null;
 let _propTimer = 0;
 function beginPropChange() {
-  if (!_propTxn) _propTxn = canvasJSON();
+  if (!_propTxn) _propTxn = currentState();
   clearTimeout(_propTimer);
   _propTimer = setTimeout(flushPropChange, 350);
 }
@@ -2179,32 +2255,41 @@ function flushPropChange() {
   clearTimeout(_propTimer);
   _propTimer = 0;
   if (!_propTxn) return;
-  state.undo.push(_propTxn);
-  if (state.undo.length > 60) state.undo.shift();
-  state.redo = [];
+  pushHistory(_propTxn);
   _propTxn = null;
-  updateUndoUI();
+  invalidateCurrent();
+  clearRedo();
 }
 
 function undo() {
   if (state.penActive) { penUndoPoint(); return; }
+  if (_restoring) return;
   flushPropChange();
   if (!state.undo.length) return;
-  const cur = canvasJSON();
+  const cur = currentState();
   const prev = state.undo.pop();
   state.redo.push(cur);
-  loadJSON(prev);
+  _restoring = true;
+  Promise.resolve(restoreState(prev)).then(() => {
+    _current = prev;
+    _restoring = false;
+  });
   updateUndoUI();
 }
 
 function redo() {
   if (state.penActive) { penRedoPoint(); return; }
+  if (_restoring) return;
   flushPropChange();
   if (!state.redo.length) return;
-  const cur = canvasJSON();
+  const cur = currentState();
   const next = state.redo.pop();
   state.undo.push(cur);
-  loadJSON(next);
+  _restoring = true;
+  Promise.resolve(restoreState(next)).then(() => {
+    _current = next;
+    _restoring = false;
+  });
   updateUndoUI();
 }
 
@@ -2253,6 +2338,13 @@ function attachPenSerializer(path) {
 function updateUndoUI() {
   els.btnUndo.disabled = !state.undo.length;
   els.btnRedo.disabled = !state.redo.length;
+  // La mémoire de l'historique est visible : c'est le seul moyen de savoir
+  // si l'incrémental fait son travail sur un vrai document.
+  if (els.btnUndo && history) {
+    const bytes = historyBytes();
+    els.btnUndo.title = 'Annuler (Ctrl+Z) — ' + state.undo.length + ' état(s), ' +
+      BirdHistory.formatBytes(bytes);
+  }
 }
 
 function canGroupSelection(active) {
@@ -4454,6 +4546,7 @@ function restorePageHistory(pageId) {
   const saved = pageHistory.get(pageId);
   state.undo = saved ? saved.undo.slice() : [];
   state.redo = saved ? saved.redo.slice() : [];
+  invalidateCurrent();
   updateUndoUI();
 }
 
@@ -4530,9 +4623,7 @@ function addPage(name) {
   loadJSON({ version: '5.1.0', objects: [], background: '' });
   state.pages.push(createPage(name));
   state.activePage = state.pages.length - 1;
-  state.undo = [];
-  state.redo = [];
-  updateUndoUI();
+  resetStacks();
   applyPageArtboard(activePage());
   renderLayers();
   renderPages();
@@ -4603,9 +4694,7 @@ function applyPageList(pages, active) {
   }));
   state.activePage = Math.max(0, Math.min(state.pages.length - 1, Number(active) || 0));
   pageHistory.clear();
-  state.undo = [];
-  state.redo = [];
-  updateUndoUI();
+  resetStacks();
 }
 
 function renderPages() {
@@ -4849,9 +4938,7 @@ function applyProjectPayload(payload) {
     const page = pages[active];
     applyPageArtboard(page);
     loadJSON(payload.pages[active].json);
-    state.undo = [];
-    state.redo = [];
-    updateUndoUI();
+    resetStacks();
     renderLayers();
     renderPages();
     return;
@@ -5401,6 +5488,7 @@ function openFileContent(content, name) {
       applyProjectPayload(data);
       state.undo = [];
       state.redo = [];
+      if (history) history.reset();
       setDirty(false);
       updateUndoUI();
       const extra = data.pages && data.pages.length > 1 ? ' — ' + data.pages.length + ' plans' : '';
@@ -6013,7 +6101,7 @@ window.addEventListener('resize', resizeCanvas);
    API PUBLIQUE (intégration Astro / Rust / automatisation)
 ════════════════════════════════════════════════════════════ */
 window.Bird = {
-  version: '1.9.0',
+  version: '2.0.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
@@ -6031,11 +6119,40 @@ window.Bird = {
     save: saveFile,
     open: (file, point) => importFile(file, point),
     payload: createProjectPayload,
+    /* Annulation exposée : un plug-in doit pouvoir inscrire ses propres
+       modifications dans le même historique que l'application. */
+    undo,
+    redo,
+    commit: (label) => commitUndo(label),
+    begin: () => beginTxn(),
+    /* Enveloppe sûre pour les plug-ins : la transaction est ouverte AVANT
+       la mutation, ce qui garantit que l'annulation restaure bien l'état
+       précédent même pour un ajout d'objet. */
+    edit: (fn, label) => {
+      beginTxn();
+      let result;
+      try { result = fn(canvas); }
+      catch (e) { cancelTxn(); throw e; }
+      commitUndo(label || 'Modification');
+      setDirty(true);
+      renderLayers();
+      return result;
+    },
+    history: () => ({
+      undo: state.undo.length,
+      redo: state.redo.length,
+      bytes: historyBytes(),
+      readable: BirdHistory.formatBytes(historyBytes()),
+      limit: HISTORY_LIMIT,
+      budget: HISTORY_BUDGET,
+      cached: history ? history.stats().cachedObjects : 0
+    }),
     load: (payload) => {
       const data = normalizeProjectPayload(payload);
       applyProjectPayload(data);
       state.undo = [];
       state.redo = [];
+      if (history) history.reset();
       updateUndoUI();
       setDirty(false);
       return requestAnimationFrame(() => { resizeCanvas(); fitView(); });

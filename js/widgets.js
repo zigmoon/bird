@@ -1,97 +1,109 @@
 /* ═══════════════════════════════════════════════════════════════
-   BIRD WIDGETS — panneaux détachables
-   Chaque section du panneau de droite peut être détachée : elle
-   devient une carte flottante déplaçable, repliable et refermable.
-   Le DOM et ses écouteurs sont CONSERVÉS (on déplace l'élément, on
-   ne le reconstruit pas), donc tous les réglages continuent de
-   fonctionner à l'identique, détachés ou rattachés.
-   Position, taille et état sont mémorisés par section.
+   BIRD — PANNEAUX DÉTACHABLES
+   ═══════════════════════════════════════════════════════════════
+   Même principe que SuperPrint : ce ne sont pas des widgets
+   séparés, ce sont LES SECTIONS EXISTANTES du panneau de droite
+   qui se détachent. Rien à dupliquer, rien à maintenir en double.
+
+   Choix d'implémentation : on DÉPLACE le nœud DOM (au lieu de le
+   cloner et de re-router les événements comme SuperPrint). Plus
+   court, et surtout impossible à désynchroniser : le widget EST le
+   panneau, avec ses écouteurs déjà en place.
+
+   L'état (détaché, replié, position) est mémorisé par section.
    ═══════════════════════════════════════════════════════════════ */
 (function (global) {
 'use strict';
 
-var STORAGE_KEY = 'bird_widgets_v1';
-var layer = null;
-var sidebar = null;
-var sections = [];
-var layout = {};
+var STORAGE_KEY = 'bird_widgets_v2';
+
+var HEAD_DETACH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9"/><path d="m4 4 5 5"/><path d="M15 20l5-5"/><path d="m20 20-5-5"/><path d="M4 15h6v5H4zM14 4h6v6h-6z"/></svg>';
+var HEAD_COLLAPSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+var HEAD_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+
+var layer = null;          // #widgetsLayer
+var sidebar = null;        // #rightSidebar
+var sections = [];         // les .props-section d'origine
+var layout = {};           // nom -> { detached, collapsed, x, y }
 var zTop = 900;
-var onLayoutChange = null;
 
-var DETACH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9"/><path d="m4 4 5 5"/><path d="M15 20l5-5"/><path d="m20 20-5-5"/><path d="M4 15h6v5H4zM14 4h6v6h-6z"/></svg>';
-var DOCK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"/><path d="m20 4-6 6"/><path d="M10 20H4v-6"/><path d="m4 20 6-6"/><path d="M4 4h6v6H4z"/></svg>';
-var COLLAPSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
-var CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-
+/* ── Persistance ── */
 function loadLayout() {
   try {
-    var raw = localStorage.getItem(STORAGE_KEY);
+    var raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('bird_widgets_v1');
     layout = raw ? JSON.parse(raw) : {};
   } catch (e) { layout = {}; }
   if (!layout || typeof layout !== 'object') layout = {};
 }
 function saveLayout() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(layout)); } catch (e) {}
-  if (onLayoutChange) onLayoutChange();
 }
 
-function sectionTitle(section) {
-  var h = section.querySelector('h3');
-  return h ? h.textContent.trim() : section.dataset.section;
-}
-
-/* Les sections ont des identifiants historiques (textProps, shapeProps…) :
-   on les retrouve donc par data-section, qui est la clé stable. */
+/* ── Utilitaires ── */
 function sectionEl(name) {
   return document.getElementById('section-' + name) ||
     document.querySelector('.props-section[data-section="' + name + '"]');
 }
 
-function ensureId(section, index) {
-  var name = section.dataset.section || ('section' + index);
-  if (!section.id) section.id = 'section-' + name;
-  return name;
+function sectionTitle(section) {
+  var h = section.querySelector('h3');
+  return h ? h.textContent.trim() : (section.dataset.section || 'Panneau');
 }
 
-/* ── En-tête de section avec bouton « détacher » ── */
-function decorateSection(section, name) {
+function railButton(name) {
+  return document.querySelector('.rightbar-icon-btn[data-section="' + name + '"]');
+}
+
+/* ── En-tête de section : titre + bouton « détacher » ──
+   Construit une seule fois au démarrage. Le bouton est toujours
+   visible (gris discret), pas seulement au survol : une fonction
+   qu'on ne voit pas n'existe pas. */
+function decorate(section, name) {
+  if (section.querySelector(':scope > .section-head')) return;
   var h = section.querySelector(':scope > h3');
   if (!h) return;
-  if (section.querySelector(':scope > .section-head')) return;
+
   var head = document.createElement('div');
   head.className = 'section-head';
-  head.appendChild(h);
-  // Le <h3> doit être dans le document avant de lire son libellé.
   section.insertBefore(head, section.firstChild);
+  head.appendChild(h);
+
   var btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'section-action section-detach';
-  btn.title = 'Détacher ce panneau en widget';
-  btn.setAttribute('aria-label', 'Détacher ' + sectionTitle(section));
-  btn.innerHTML = DETACH_ICON;
+  btn.title = 'Détacher « ' + sectionTitle(section) + ' » en panneau flottant';
+  btn.setAttribute('aria-label', btn.title);
+  btn.innerHTML = HEAD_DETACH;
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    e.preventDefault();
     detach(name);
   });
   head.appendChild(btn);
 }
 
-/* ── Carte flottante ── */
-function createWidget(name, section) {
+/* ── Carte flottante : on y DÉPLACE la section telle quelle ── */
+function buildCard(name, section) {
   var card = document.createElement('div');
   card.className = 'sp-widget';
   card.dataset.section = name;
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', sectionTitle(section));
 
   var head = document.createElement('div');
   head.className = 'sp-widget-head';
-  head.innerHTML = '<span class="dot"></span><span class="sp-widget-title">' +
-    sectionTitle(section) + '</span>';
+
+  var dot = document.createElement('span');
+  dot.className = 'dot';
+  var title = document.createElement('span');
+  title.className = 'sp-widget-title';
+  title.textContent = sectionTitle(section);
 
   var collapse = document.createElement('button');
   collapse.type = 'button';
   collapse.className = 'sp-widget-btn';
-  collapse.title = 'Replier';
-  collapse.innerHTML = COLLAPSE_ICON;
+  collapse.title = 'Replier / déplier';
+  collapse.innerHTML = HEAD_COLLAPSE;
   collapse.addEventListener('click', function (e) {
     e.stopPropagation();
     toggleCollapse(name);
@@ -100,24 +112,26 @@ function createWidget(name, section) {
   var close = document.createElement('button');
   close.type = 'button';
   close.className = 'sp-widget-btn';
-  close.title = 'Rattacher au panneau';
-  close.innerHTML = CLOSE_ICON;
+  close.title = 'Rattacher au panneau de droite';
+  close.innerHTML = HEAD_CLOSE;
   close.addEventListener('click', function (e) {
     e.stopPropagation();
     dock(name);
   });
 
+  head.appendChild(dot);
+  head.appendChild(title);
   head.appendChild(collapse);
   head.appendChild(close);
 
   var body = document.createElement('div');
   body.className = 'sp-widget-body';
   body.appendChild(section);
+  section.classList.add('is-floating');
 
   card.appendChild(head);
   card.appendChild(body);
   layer.appendChild(card);
-
   makeDraggable(card, head, name);
   return card;
 }
@@ -135,7 +149,7 @@ function makeDraggable(card, handle, name) {
     var r = card.getBoundingClientRect();
     origX = r.left;
     origY = r.top;
-    handle.setPointerCapture(e.pointerId);
+    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
     e.preventDefault();
   });
 
@@ -143,10 +157,8 @@ function makeDraggable(card, handle, name) {
     if (!dragging) return;
     var nx = origX + (e.clientX - startX);
     var ny = origY + (e.clientY - startY);
-    var maxX = window.innerWidth - card.offsetWidth - 4;
-    var maxY = window.innerHeight - 36;
-    nx = Math.max(4, Math.min(maxX, nx));
-    ny = Math.max(4, Math.min(maxY, ny));
+    nx = Math.max(4, Math.min(window.innerWidth - card.offsetWidth - 4, nx));
+    ny = Math.max(4, Math.min(window.innerHeight - 36, ny));
     card.style.left = nx + 'px';
     card.style.top = ny + 'px';
     card.style.right = 'auto';
@@ -159,37 +171,42 @@ function makeDraggable(card, handle, name) {
     card.classList.remove('is-dragging');
     try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
     layout[name] = layout[name] || {};
-    layout[name].x = Math.round(card.getBoundingClientRect().left);
-    layout[name].y = Math.round(card.getBoundingClientRect().top);
+    var r = card.getBoundingClientRect();
+    layout[name].x = Math.round(r.left);
+    layout[name].y = Math.round(r.top);
     saveLayout();
   });
 }
 
 function place(card, name) {
   var cfg = layout[name] || {};
-  var count = layer.querySelectorAll('.sp-widget').length - 1;
-  var x = typeof cfg.x === 'number' ? cfg.x : Math.max(12, window.innerWidth - 300 - 268);
-  var y = typeof cfg.y === 'number' ? cfg.y : 64 + Math.max(0, count) * 34;
+  var index = Array.prototype.indexOf.call(layer.querySelectorAll('.sp-widget'), card);
+  var cascade = Math.max(0, index) * 30;
+  var x = typeof cfg.x === 'number' ? cfg.x : Math.max(12, window.innerWidth - 304 - 268);
+  var y = typeof cfg.y === 'number' ? cfg.y : 64 + cascade;
   card.style.left = x + 'px';
   card.style.top = y + 'px';
   card.style.zIndex = String(++zTop);
-  if (cfg.width && cfg.width >= 200) card.style.width = cfg.width + 'px';
   if (cfg.collapsed) card.classList.add('is-collapsed');
 }
 
-/* ── API publique ── */
+/* ── Détacher / rattacher ── */
 function detach(name) {
   var section = sectionEl(name);
   if (!section || section.classList.contains('is-detached')) return;
-  var cfg = layout[name] || (layout[name] = {});
-  cfg.detached = true;
+
+  layout[name] = layout[name] || {};
+  layout[name].detached = true;
   section.classList.add('is-detached');
-  var card = createWidget(name, section);
+
+  var card = buildCard(name, section);
   place(card, name);
-  if (cfg.collapsed) card.classList.add('is-collapsed');
-  saveLayout();
-  renderList();
   if (sidebar) sidebar.classList.remove('collapsed');
+  markRail(name, true);
+  saveLayout();
+  card.classList.add('is-entering');
+  setTimeout(function () { card.classList.remove('is-entering'); }, 180);
+  return card;
 }
 
 function dock(name) {
@@ -197,17 +214,17 @@ function dock(name) {
   var section = sectionEl(name);
   var content = document.querySelector('.props-content');
   if (card && section && content) {
-    // Retour à la position d'origine : la section retrouve sa place dans l'ordre.
+    // Retour à la place d'origine, dans l'ordre du panneau.
     var order = sections.map(function (s) { return s.dataset.section; });
-    var index = order.indexOf(name);
     var anchor = null;
-    for (var i = index + 1; i < order.length; i++) {
+    for (var i = order.indexOf(name) + 1; i < order.length; i++) {
       var next = sectionEl(order[i]);
       if (next && !next.classList.contains('is-detached')) { anchor = next; break; }
     }
     if (anchor) content.insertBefore(section, anchor);
     else content.appendChild(section);
     section.classList.remove('is-detached');
+    section.classList.remove('is-floating');
     card.remove();
   }
   if (layout[name]) {
@@ -215,8 +232,8 @@ function dock(name) {
     delete layout[name].x;
     delete layout[name].y;
   }
+  markRail(name, false);
   saveLayout();
-  renderList();
 }
 
 function toggleCollapse(name) {
@@ -226,7 +243,6 @@ function toggleCollapse(name) {
   layout[name] = layout[name] || {};
   layout[name].collapsed = card.classList.contains('is-collapsed');
   saveLayout();
-  renderList();
 }
 
 function dockAll() {
@@ -239,103 +255,120 @@ function reset() {
   dockAll();
   layout = {};
   saveLayout();
-  renderList();
 }
 
-function renderList() {
-  var list = document.getElementById('widgetsList');
-  if (!list) return;
-  list.innerHTML = '';
-  sections.forEach(function (section) {
-    var name = section.dataset.section;
-    var cfg = layout[name] || {};
-    var row = document.createElement('div');
-    row.className = 'widget-row';
-    var label = document.createElement('span');
-    label.className = 'widget-name';
-    label.textContent = sectionTitle(section);
-    var state = document.createElement('span');
-    state.className = 'widget-state' + (cfg.detached ? '' : ' is-docked');
-    state.textContent = cfg.detached ? 'Détaché' : 'Ancré';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.title = cfg.detached ? 'Rattacher' : 'Détacher';
-    btn.innerHTML = cfg.detached ? DOCK_ICON : DETACH_ICON;
-    btn.addEventListener('click', function () {
-      if (cfg.detached) dock(name); else detach(name);
-    });
-    row.appendChild(label);
-    row.appendChild(state);
-    row.appendChild(btn);
-    list.appendChild(row);
-  });
-  if (!sections.length) {
-    list.innerHTML = '<div class="widgets-empty">Aucun panneau.</div>';
-  }
+/* ── Rail d'icônes : reflète l'état détaché ──
+   Une section détachée n'est plus dans le panneau : cliquer son icône
+   doit faire remonter le widget, pas faire défiler une section
+   devenue invisible. */
+function markRail(name, detached) {
+  var btn = railButton(name);
+  if (!btn) return;
+  btn.classList.toggle('has-widget', !!detached);
+  btn.dataset.detached = detached ? '1' : '';
+  btn.title = btn.title.replace(/\s*·\s*détaché$/, '') + (detached ? ' · détaché' : '');
 }
 
-/* Une section masquée (texte sans sélection, forme non applicable…)
-   masque aussi son widget : le panneau reste cohérent dans les deux états. */
+function raise(name) {
+  var card = layer.querySelector('.sp-widget[data-section="' + name + '"]');
+  if (!card) return false;
+  card.style.zIndex = String(++zTop);
+  card.classList.remove('is-pulse');
+  void card.offsetWidth;
+  card.classList.add('is-pulse');
+  setTimeout(function () { card.classList.remove('is-pulse'); }, 520);
+  return true;
+}
+
+/* ── Une section masquée par l'application (texte sans sélection…)
+      masque aussi son widget : les deux restent cohérents. ── */
 function syncVisibility() {
   sections.forEach(function (section) {
     var name = section.dataset.section;
     var card = layer.querySelector('.sp-widget[data-section="' + name + '"]');
     if (!card) return;
-    card.style.display = section.hasAttribute('hidden') ? 'none' : '';
+    var hidden = section.hasAttribute('hidden');
+    var shown = card.style.display !== 'none';
+    if (hidden === shown) card.style.display = hidden ? 'none' : '';
   });
 }
 
+/* La largeur du panneau est publiée sur :root : le widget de zoom s'écarte
+   d'autant. Une seule source de vérité, aucun style en ligne. */
+function publish() {
+  if (!sidebar) return;
+  var w = Math.round(sidebar.getBoundingClientRect().width) || 56;
+  document.documentElement.style.setProperty('--bird-sidebar-r', w + 'px');
+}
+
+/* ── Initialisation ── */
 function init(options) {
   options = options || {};
   sidebar = options.sidebar || document.getElementById('rightSidebar');
   layer = options.layer || document.getElementById('widgetsLayer');
-  if (!layer) return null;
+  if (!layer || !sidebar) return null;
+
   loadLayout();
 
   sections = Array.prototype.slice.call(
     document.querySelectorAll('.props-content > .props-section')
   );
   sections.forEach(function (section, i) {
-    var name = ensureId(section, i);
-    decorateSection(section, name);
+    var name = section.dataset.section || 'section' + i;
+    section.dataset.section = name;
+    if (!section.id) section.id = 'section-' + name;
+    decorate(section, name);
   });
 
-  // Nettoyage des sections qui n'existent plus.
-  Object.keys(layout).forEach(function (name) {
-    if (!sectionEl(name)) delete layout[name];
-  });
-
-  // Restaure les widgets détachés.
+  // Reprise de la session précédente.
   sections.forEach(function (section) {
     var name = section.dataset.section;
     if (layout[name] && layout[name].detached) detach(name);
   });
 
+  // En-tête du panneau : replier / déplier. Bouton ↧ : tout rattacher.
   var header = document.getElementById('propsHeader');
-  if (header) {
-    header.addEventListener('click', function (e) {
-      if (e.target.closest('button')) return;
-      sidebar.classList.toggle('collapsed');
-      sidebar.dispatchEvent(new CustomEvent('bird:sidebar-toggle'));
-    });
-  }
+  if (header) header.addEventListener('click', function (e) {
+    if (e.target.closest('button')) return;
+    sidebar.classList.toggle('collapsed');
+    publish();
+  });
   var dockAllBtn = document.getElementById('propsDockAll');
   if (dockAllBtn) dockAllBtn.addEventListener('click', function (e) {
     e.stopPropagation();
     dockAll();
   });
-  var resetBtn = document.getElementById('widgetsReset');
-  if (resetBtn) resetBtn.addEventListener('click', reset);
 
-  renderList();
+  // Icônes du rail : si la section est détachée, on remonte le widget.
+  document.querySelectorAll('.rightbar-icon-btn[data-section]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      var name = btn.dataset.section;
+      if (layout[name] && layout[name].detached) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        raise(name);
+      }
+    }, true);
+  });
+
+  sections.forEach(function (section) {
+    var cfg = layout[section.dataset.section];
+    if (cfg && cfg.detached) markRail(section.dataset.section, true);
+  });
+
   syncVisibility();
   setInterval(syncVisibility, 400);
+  publish();
+
   window.addEventListener('resize', function () {
-    // Garde les widgets dans la fenêtre après un redimensionnement.
     layer.querySelectorAll('.sp-widget').forEach(function (card) {
       var r = card.getBoundingClientRect();
-      if (r.left > window.innerWidth - 60) card.style.left = Math.max(4, window.innerWidth - card.offsetWidth - 8) + 'px';
-      if (r.top > window.innerHeight - 40) card.style.top = Math.max(4, window.innerHeight - 80) + 'px';
+      if (r.left > window.innerWidth - 80) {
+        card.style.left = Math.max(4, window.innerWidth - card.offsetWidth - 8) + 'px';
+      }
+      if (r.top > window.innerHeight - 60) {
+        card.style.top = Math.max(4, window.innerHeight - 80) + 'px';
+      }
     });
   });
 
@@ -344,12 +377,14 @@ function init(options) {
     dock: dock,
     dockAll: dockAll,
     reset: reset,
+    raise: raise,
     toggleCollapse: toggleCollapse,
+    isDetached: function (name) { return !!(layout[name] && layout[name].detached); },
     list: function () { return sections.map(function (s) { return s.dataset.section; }); },
-    layout: function () { return layout; },
-    onChange: function (fn) { onLayoutChange = fn; }
+    layout: function () { return layout; }
   };
 }
 
-global.BirdWidgets = { init: init, version: '1.0.0' };
+global.BirdWidgets = { init: init, publish: publish, version: '2.0.0' };
+
 })(window);

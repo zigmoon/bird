@@ -188,8 +188,9 @@ BirdPlugins.register({
 | `api.svgToGroup()` / `api.pattern()` | SVG → Fabric group, `fabric.Pattern` |
 
 Field types: `select`, `range` (with `<output>`), `number`, `color`, `checkbox`,
-`text`, `textarea`, `group`. Install from file, toggle on, the icon appears in
-the centred toolbar.
+`text`, `textarea`, `group`. Install from file, toggle on, then open it from the
+**Plug-ins** panel in the right rail — the top toolbar stays free of extensions,
+one button per plug-in would not scale.
 
 **Bundled: Vector pattern** — 9 seamless patterns (stripes, checker, dots,
 waves, chevrons, triangles, crosses, grid, scales). Each tile has a whole-number
@@ -214,6 +215,42 @@ working — a detached layer panel is still the live layer panel.
 Bird.widgets.detach('layers');
 Bird.widgets.dockAll();
 Bird.widgets.reset();
+```
+
+---
+
+## Undo/redo — incremental, not snapshots
+
+The naïve design stores `canvas.toJSON()` at every step. With one 2 MB image and
+60 undo steps that is 120 MB of memory for an object that never changed.
+
+Bird stores **maps of `objectId → objectJSON`** instead. Two consecutive states
+share the *same string* for every object that did not move, so an edit costs
+only the objects it actually touched:
+
+| Scenario | Full snapshots | Bird 2.0 |
+|---|---|---|
+| 30 rectangles, 30 undo steps | ~1 Mo (30 × 33 Ko) | **33 Ko** |
+| + one 400 Ko image | +400 Ko *per step* | **+400 Ko once** |
+| + 20 nudges of one rectangle | +660 Ko | **+21 Ko** |
+| Total for one full snapshot of that document | — | **1,1 Mo** |
+
+A whole undo history ends up costing about as much as **one** old-style
+snapshot. Images are interned, never duplicated.
+
+- Serialised objects carry a stable `birdId`, so identity survives a round trip
+  and the sharing keeps working across undo/redo.
+- Trimming is bounded by **bytes**, not just by step count: 80 steps *or* 64 Mo,
+  whichever comes first.
+- `undo` reports its real weight in its tooltip (`Ctrl+Z` — 12 states, 84 Ko) —
+  memory you cannot see is memory you cannot fix.
+- Undo/redo is locked while a document is being re-materialised, so a fast
+  double `Ctrl+Z` can never record the empty canvas that Fabric exposes mid-load.
+- Every artboard has its own stacks; shared strings stay shared across them.
+
+```js
+Bird.document.history();   // { undo, redo, bytes, readable, limit, budget, cached }
+Bird.document.edit((canvas) => { /* … */ }, 'Label');  // one safe undo entry
 ```
 
 ---
@@ -273,6 +310,7 @@ bird/
 │   ├── icc.js                  sRGB → CMYK, ICC profile build & read
 │   ├── pdfx.js                 PDF/X-1a writer (CMYK, shadings, output intent)
 │   ├── vector-tools.js         text→curves, outline, offset, simplify, symbols, blend
+│   ├── history.js              incremental undo/redo (object-interning, byte budget)
 │   ├── widgets.js              detachable panels
 │   ├── plugins.js              plug-in host, registry, settings drawer
 │   └── app.js                  application: tools, history, layers, export
@@ -392,7 +430,7 @@ Two bugs worth remembering, both fixed and documented in the code:
 - [x] Real PDF gradients (shadings)
 - [x] Outline stroke, offset path, simplify, symbols, blend
 - [x] Native desktop shell (macOS, Windows, Linux)
-- [ ] Incremental history (avoid full JSON snapshots with images)
+- [x] Incremental history (object-interning, byte-budgeted)
 - [ ] WebGL / OffscreenCanvas rendering for very large documents
 - [ ] Playwright visual regression tests on import/export
 - [ ] Local-first collaboration (CRDT) and version history

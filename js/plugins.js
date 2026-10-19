@@ -610,25 +610,12 @@ function renderList() {
   });
 }
 
-/* ── Icônes des plug-ins actifs dans la barre haute ── */
+/* ── Icônes des plug-ins actifs dans la barre haute ──
+   Volontairement vide : l'accès aux plug-ins actifs se fait par le panneau
+   « Plug-ins » du rail de droite. La barre haute ne doit pas se remplir
+   d'un bouton par extension installée — c'est le rôle du panneau. */
 function syncToolbar() {
-  var center = document.querySelector('.topbar-center');
-  if (!center) return;
-  center.querySelectorAll('.plugin-tool-btn').forEach(function (b) { b.remove(); });
-  var anchor = document.getElementById('btnPlugins');
-  Object.keys(registry).forEach(function (id) {
-    if (!active[id]) return;
-    var m = registry[id];
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-square plugin-tool-btn';
-    btn.title = m.name;
-    btn.dataset.plugin = id;
-    btn.innerHTML = m.icon || DEFAULT_ICON;
-    btn.addEventListener('click', function () { openDrawer(registry[id]); });
-    if (anchor && anchor.parentNode === center) center.insertBefore(btn, anchor);
-    else center.appendChild(btn);
-  });
+  document.querySelectorAll('.topbar-center .plugin-tool-btn').forEach(function (b) { b.remove(); });
 }
 
 /* ── Installation depuis un fichier ── */
