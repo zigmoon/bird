@@ -91,10 +91,11 @@
     set: set,
     toggle: toggle,
     onChange: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
-    // Pour les appelants de l'API : la langue courante, pas la source.
+    // Pour les appelants de l'API : la langue courante, pas la source. C'est
+    // une valeur qui sort du DOM, d'où la traduction explicite.
     label: function () {
       var raw = current() === 'dark' ? 'Mode jour' : 'Mode nuit';
-      return global.BirdI18n ? global.BirdI18n.t(raw) : raw;
+      return global.BirdI18n ? global.BirdI18n.t(raw) : raw; // i18n:allow valeur d'API, hors DOM
     }
   };
 

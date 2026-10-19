@@ -385,6 +385,6 @@ function init(options) {
   };
 }
 
-global.BirdWidgets = { init: init, publish: publish, version: '2.2.2' };
+global.BirdWidgets = { init: init, publish: publish, version: '2.3.0' };
 
 })(window);

@@ -431,6 +431,7 @@ bird/
 │   ├── history.js             historique incrémental (interning d’objets, budget en octets)
 │   ├── commands.js            registre de commandes — clavier, menu natif, aide
 │   ├── native.js              pont Tauri : dialogues, disque, événements de menu
+│   ├── theme.js               bascule jour / nuit (data-theme + localStorage)
 │   ├── widgets.js             panneaux détachables (carte flottante + mémoire)
 │   ├── plugins.js             hôte de plug-ins : registre, tiroir, API
 │   ├── pdf.min.js             lecture PDF (pdf.js 3.11, chargé à la demande)
@@ -449,7 +450,7 @@ bird/
 ### API d’intégration
 
 ```js
-Bird.version                         // '2.2.0'
+Bird.version                         // '2.3.0'
 Bird.document.new()                  // nouveau document
 Bird.document.payload()              // projet sérialisé (tous les plans)
 Bird.document.load(payload)          // ouvre un projet
@@ -459,8 +460,7 @@ Bird.io.pdfPageCount(arrayBuffer)    // → { pages, sizes:[{ index, width, heig
 Bird.io.svgPagesToPDF([{ svg, width, height }])  // → PDF multi-pages
 Bird.io.importEPS(arrayBuffer)       // → groupe Fabric
 Bird.io.importSVG(svgText)
-Bird.export({ format:'pdf', scope:'document', background:'artboard', returnBlob:true })
-Bird.export({ format:'pdf', scope:'pages', returnBlob:true })   // une page par plan
+Bird.export({ format:'pdf', scope:'document' })   // → objet de résultat (voir ci-dessous)
 Bird.exportSVG({ background:'transparent' })
 Bird.zoom.selection()
 
@@ -480,6 +480,35 @@ BirdPlugins.list()                   // manifestes enregistrés
 BirdPlugins.open('motif-vectoriel')  // ouvre le tiroir de réglages
 BirdPlugins.toggle('mon-plugin')     // active / désactive
 ```
+
+#### `Bird.export(opts)` — une seule forme de retour, tous formats
+
+```js
+const res = await Bird.export({
+  format: 'pdfx',            // 'svg' | 'pdf' | 'pdfx' | 'png' | 'jpg' | 'webp'
+  scope: 'document',         // 'document' | 'selection' | 'pages'
+  scale: 2,                  // raster uniquement
+  background: 'artboard',    // 'artboard' | 'transparent' | 'white'
+  bleed: 0,                  // pdfx uniquement
+  filename: 'affiche',       // sans extension
+  download: true             // false = renvoyer sans enregistrer
+});
+
+// Résout toujours vers le même objet — jamais `null`, jamais un Blob nu :
+//   res.ok          booléen, false en cas d'échec
+//   res.format      format réellement produit
+//   res.filename    nom proposé, extension comprise
+//   res.blob        Blob, toujours présent en cas de succès
+//   res.bytes       Uint8Array (pdf, pdfx, pages)
+//   res.dataURL     chaîne (png, jpg, webp)
+//   res.warnings    string[] (pdfx : profil ICC absent, objet ignoré…)
+//   res.downloaded  un fichier a-t-il été écrit
+//   res.error       message lorsque ok vaut false
+```
+
+`returnBlob` / `returnDataURL` restent acceptés comme alias de
+`download: false` : un appel existant garde son sens « n’enregistre pas » au
+lieu de déclencher un téléchargement inattendu.
 
 ---
 
@@ -610,7 +639,7 @@ Deux espaces de coordonnées, et les mélanger ne fait aucun bruit :
 
 ### Invariants d’interface, vérifiés avant chaque build
 
-`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode quatre
+`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode cinq
 régressions déjà livrées, invisibles côté code et évidentes côté utilisateur :
 
 | Contrôle | Le bug qu’il empêche |
@@ -619,8 +648,10 @@ régressions déjà livrées, invisibles côté code et évidentes côté utilis
 | Aucune couleur chromatique dans le CSS, le JS ou le HTML | l’état actif des bascules était bleu (`#eef4ff` / `#1677ff`) : hors DA, noir, blanc et gris |
 | Un fichier nommé `*white*` doit contenir du blanc | `bird-mark-white.svg` contenait `#0C0C0F`, exactement la couleur du panneau du splash derrière lui |
 | Tout asset référencé doit exister | Un paquet de déploiement pouvait omettre `css/fonts/` ; les `@font-face` échouaient en silence et la page retombait sur une police système |
+| Aucun module n’appelle `BirdI18n.t()` | un module écrivait un libellé traduit dans le DOM ; i18n le relisait comme une écriture de l’application et le figeait comme source — « Apparence » restait « Appearance » après un retour au français |
 
-Une exception légitime s’écrit `check-ui:allow <raison>` sur la même ligne.
+Une exception légitime s’écrit `check-ui:allow <raison>` (ou `i18n:allow
+<raison>` pour le dernier) sur la même ligne.
 
 ### Cache : la règle à ne pas oublier
 

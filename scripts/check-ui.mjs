@@ -17,10 +17,14 @@
  *      des bascules, les listes de calques, les pages et les repères. La DA de
  *      Bird est monochrome : un état actif se lit par un enfoncement gris, pas
  *      par une couleur. Ce contrôle rend la dérive impossible.
+ *   5. Un module écrivait le résultat de `BirdI18n.t()` dans un nœud du DOM.
+ *      i18n prenait ensuite cette traduction pour une écriture de
+ *      l'application et la figeait comme nouvelle source : « Apparence »
+ *      restait « Appearance » après un retour au français.
  *
- * Chaque contrôle encode la cause, pas le symptôme. Une exception légitime
- * s'écrit en commentaire `check-ui:allow <raison>` sur la même ligne que la
- * déclaration concernée.
+ * Cinq contrôles, chacun encodant la cause et non le symptôme. Une exception
+ * légitime s'écrit en commentaire `check-ui:allow <raison>` (ou `i18n:allow`
+ * pour le cinquième) sur la même ligne que la déclaration concernée.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -198,10 +202,48 @@ function checkMonochrome() {
   }
 }
 
+/* ── 5. Les modules écrivent la SOURCE, jamais la traduction ──
+   Le français est la langue source du balisage et des scripts ; `js/i18n.js`
+   applique la langue courante au DOM. Un module qui écrit `BirdI18n.t(...)`
+   dans un nœud ou un attribut casse le mécanisme : i18n prend ensuite cette
+   traduction pour une écriture de l'application et la fige comme nouvelle
+   source. C'est exactement ce qui a produit « Apparence » restant
+   « Appearance » après un retour au français.
+
+   Deux sorties légitimes échappent au DOM — la barre de titre native et une
+   valeur renvoyée par l'API : elles s'annotent avec `i18n:allow <raison>`. */
+function checkTranslationSource() {
+  const dir = path.join(root, 'js');
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith('.js') || /\.min\.js$/i.test(name) || name === 'i18n.js') continue;
+    const rel = 'js/' + name;
+    const raw = fs.readFileSync(path.join(dir, name), 'utf8');
+    // On neutralise les commentaires en conservant les retours à la ligne,
+    // pour que les numéros de ligne restent exacts : un commentaire qui cite
+    // le mécanisme n'est pas un appel.
+    const code = raw
+      .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+      .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
+    const rawLines = raw.split('\n');
+    for (const [index, line] of code.split('\n').entries()) {
+      if (!/BirdI18n\.t\(/.test(line)) continue;
+      if ((rawLines[index] || '').includes('i18n:allow')) continue;
+      errors.push(
+        `${rel}:${index + 1} — traduction appliquée par un module :\n` +
+        '    ' + (rawLines[index] || '').trim() + '\n' +
+        '    Écrire la source française et laisser js/i18n.js traduire.\n' +
+        '    Si la valeur sort du DOM (barre native, retour d’API) : ajouter « i18n:allow <raison> ».'
+      );
+    }
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
 checkMonochrome();
+checkTranslationSource();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -209,5 +251,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions');
 for (const n of notes) console.log('  · ' + n);

@@ -3103,10 +3103,12 @@ function mountShellExtras() {
     if (typeof updateRulers === 'function') updateRulers();
   });
 
-  // Le titre de l'onglet et de la barre native sont construits en JS : ils
-  // échappent au traducteur du DOM, il faut les reconstruire à la bascule.
+  // Le titre de l'onglet est traduit par `applyTitle` (i18n) ; seule la barre
+  // native, hors DOM, doit être reconstruite à la bascule de langue.
   if (window.BirdI18n && window.BirdI18n.onChange) {
-    window.BirdI18n.onChange(() => { if (typeof setDocumentTitle === 'function') setDocumentTitle(state.docName || null); });
+    window.BirdI18n.onChange(() => {
+      if (nativeShell() && BirdNative.setTitle) BirdNative.setTitle(nativeWindowTitle(state.docName || null));
+    });
   }
 
   if (window.BirdWidgets) {
@@ -3679,19 +3681,24 @@ function bindExportModal() {
     try {
       if (!navigator.clipboard || !navigator.clipboard.write) throw new Error('Presse-papiers non disponible');
       const fmt = state.exportFormat;
-      if (fmt === 'svg') {
-        const blob = await runExport({ format: 'svg', scope: state.exportScope, background: $('exportBackground').value, returnBlob: true });
-        if (!blob) return;
-        await navigator.clipboard.write([new ClipboardItem({ 'image/svg+xml': blob })]);
-      } else if (fmt === 'pdf') {
+      if (fmt === 'pdf') {
         toast('Le PDF ne peut pas être copié : exportez-le', true);
         return;
-      } else {
-        const dataURL = await runExport({ format: fmt, scope: state.exportScope, scale: Number($('exportScale').value) || 1, background: $('exportBackground').value, returnDataURL: true });
-        if (!dataURL) return;
-        const blob = await (await fetch(dataURL)).blob();
-        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
       }
+      // Le contrat d'export renvoie toujours un blob : un seul chemin suffit,
+      // et le type MIME vient du format réellement produit.
+      const res = await runExport({
+        format: fmt,
+        scope: state.exportScope,
+        scale: Number($('exportScale').value) || 1,
+        background: $('exportBackground').value,
+        download: false
+      });
+      if (!res.ok || !res.blob) {
+        if (res.error) toast('Copie impossible : ' + res.error, true);
+        return;
+      }
+      await navigator.clipboard.write([new ClipboardItem({ [res.blob.type]: res.blob })]);
       close();
       toast('Copié dans le presse-papiers ✓');
     } catch (err) {
@@ -5240,31 +5247,88 @@ function exportBounds(scope) {
 }
 
 /**
- * Export unifié. * opts = { format:'svg'|'pdf'|'png'|'jpg'|'webp', scope:'document'|'selection',
- *          scale:1..4, background:'artboard'|'transparent'|'white', returnBlob:boolean }
+ * Export unifié — point d'entrée public (`Bird.export`).
+ *
+ *   opts = {
+ *     format: 'svg' | 'pdf' | 'pdfx' | 'png' | 'jpg' | 'webp',
+ *     scope: 'document' | 'selection' | 'pages',
+ *     scale: 1..4,                 // raster uniquement
+ *     background: 'artboard' | 'transparent' | 'white',
+ *     bleed: 0..,                  // pdfx uniquement
+ *     filename: 'sans-extension',
+ *     download: false              // ne rien télécharger, seulement renvoyer
+ *   }
+ *
+ * Résout toujours vers { ok, format, filename, blob, bytes, dataURL,
+ * warnings, downloaded, error } — jamais `null`, jamais un Blob nu.
  */
+/* ── Contrat d'export ──────────────────────────────────────────
+   Une seule forme de retour, quel que soit le format. Avant, `pdfx` renvoyait
+   { blob, bytes, warnings }, `pdf` et `svg` un Blob nu, et le raster rien du
+   tout : un appelant devait connaître le format pour savoir quoi lire, et ne
+   pouvait pas distinguer un échec d'un succès vide (les deux valaient `null`).
+
+   Désormais, toujours :
+     { ok, format, filename, blob, bytes, dataURL, warnings, downloaded, error }
+
+   `ok: false` remplace le `null`, avec `error` lisible. Les options
+   historiques `returnBlob` / `returnDataURL` ne voulaient dire qu'une chose —
+   « ne télécharge pas » — et restent acceptées comme alias de
+   `download: false`, pour qu'un appel existant ne se transforme pas en
+   téléchargement surprise. */
+function exportResult(fields) {
+  return Object.assign({
+    ok: true,
+    format: null,
+    filename: null,
+    blob: null,
+    bytes: null,
+    dataURL: null,
+    warnings: [],
+    downloaded: false,
+    error: null
+  }, fields || {});
+}
+
+function exportFailure(format, message) {
+  return exportResult({ ok: false, format: format || null, error: message || 'erreur inconnue' });
+}
+
+function exportWantsDownload(opts) {
+  if (opts && opts.download === false) return false;
+  if (opts && (opts.returnBlob === true || opts.returnDataURL === true)) return false;
+  return true;
+}
+
 async function runExport(opts) {
   opts = opts || {};
   finalizePendingForExport();
   const format = opts.format || 'svg';
   const scope = opts.scope || 'document';
+  const download = exportWantsDownload(opts);
+  const base = opts.filename || ('bird-' + timestamp());
 
   // Export multi-plans : un seul PDF, une page par plan de travail.
   if (scope === 'pages') {
-    if (format !== 'pdf') { toast('L’export multi-plans produit un PDF', true); return null; }
-    return await exportPagesPDF(opts);
+    if (format !== 'pdf') {
+      toast('L’export multi-plans produit un PDF', true);
+      return exportFailure(format, 'multi-page export only produces a PDF');
+    }
+    return await exportPagesPDF(opts, download, base);
   }
 
   // PDF d'imprimerie : chemin entièrement séparé (CMJN, shadings, ICC).
-  if (format === 'pdfx') return await exportPDFX(opts);
+  if (format === 'pdfx') return await exportPDFX(opts, download, base);
 
   const bounds = exportBounds(scope);
-  if (!bounds) { toast('Sélectionnez au moins un objet', true); return null; }
+  if (!bounds) {
+    toast('Sélectionnez au moins un objet', true);
+    return exportFailure(format, 'nothing to export');
+  }
 
   const background = opts.background ||
     (format === 'png' ? 'transparent' : format === 'jpg' ? 'white' : 'artboard');
   const scale = Number(opts.scale) || 1;
-  const base = opts.filename || ('bird-' + timestamp());
   const active = canvas.getActiveObject();
   const all = canvas.getObjects().slice();
   const savedVisibility = all.map(o => o.visible === false);
@@ -5283,16 +5347,19 @@ async function runExport(opts) {
       const svg = buildSVGString(bounds.width, bounds.height, { bounds, background });
       if (format === 'svg') {
         const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-        if (opts.returnBlob) return blob;
-        downloadBlob(blob, base + '.svg', 'SVG exporté ✓');
-        return blob;
+        const filename = base + '.svg';
+        if (download) downloadBlob(blob, filename, 'SVG exporté ✓');
+        return exportResult({ format: 'svg', filename: filename, blob: blob, downloaded: download });
       }
       if (!window.BirdIO) throw new Error('Moteur PDF indisponible');
       toast('Composition du PDF…');
-      const result = await BirdIO.svgToPDF(svg, bounds.width, bounds.height, { title: 'Bird' });
-      if (opts.returnBlob) return result.blob;
-      downloadBlob(result.blob, base + '.pdf', 'PDF vectoriel exporté ✓');
-      return result.blob;
+      const pdf = await BirdIO.svgToPDF(svg, bounds.width, bounds.height, { title: 'Bird' });
+      const filename = base + '.pdf';
+      if (download) downloadBlob(pdf.blob, filename, 'PDF vectoriel exporté ✓');
+      return exportResult({
+        format: 'pdf', filename: filename, blob: pdf.blob, bytes: pdf.bytes || null,
+        downloaded: download
+      });
     }
 
     // Raster
@@ -5320,15 +5387,23 @@ async function runExport(opts) {
       height: bounds.height
     });
     if (!dataURL) throw new Error('Rendu impossible');
-    if (opts.returnDataURL) return dataURL;
     const ext = format === 'jpg' ? '.jpg' : format === 'webp' ? '.webp' : '.png';
-    downloadDataURL(dataURL, base + ext,
-      (format === 'jpg' ? 'JPG' : format === 'webp' ? 'WEBP' : 'PNG') + ' exporté ✓');
-    return dataURL;
+    const filename = base + ext;
+    const blob = dataURLToBlob(dataURL);
+    // Un seul mécanisme de téléchargement pour tous les formats : un lien
+    // `blob:`, jamais une URL `data:` (que les navigateurs restreignent de
+    // plus en plus sur les téléchargements).
+    if (download) {
+      downloadBlob(blob, filename,
+        (format === 'jpg' ? 'JPG' : format === 'webp' ? 'WEBP' : 'PNG') + ' exporté ✓');
+    }
+    return exportResult({
+      format: format, filename: filename, dataURL: dataURL, blob: blob, downloaded: download
+    });
   } catch (err) {
     console.error('[Bird export]', err);
     toast('Export impossible : ' + (err.message || 'erreur inconnue'), true);
-    return null;
+    return exportFailure(format, err.message || 'erreur inconnue');
   } finally {
     all.forEach((o, i) => { o.visible = !savedVisibility[i]; });
     canvas._renderBackground = savedBgRenderer;
@@ -5347,10 +5422,18 @@ async function runExport(opts) {
    nous-mêmes (js/pdfx.js) pour avoir du CMJN, de vrais shadings,
    un OutputIntent ICC et du texte vectorisé.
 ════════════════════════════════════════════════════════════ */
-async function exportPDFX(opts) {
+async function exportPDFX(opts, download, base) {
   opts = opts || {};
-  if (!window.BirdPDFX) { toast('Moteur PDF/X indisponible', true); return null; }
-  if (!window.paper) { toast('Moteur vectoriel indisponible', true); return null; }
+  if (download === undefined) download = exportWantsDownload(opts);
+  if (base === undefined) base = opts.filename || ('bird-' + timestamp());
+  if (!window.BirdPDFX) {
+    toast('Moteur PDF/X indisponible', true);
+    return exportFailure('pdfx', 'PDF/X engine unavailable');
+  }
+  if (!window.paper) {
+    toast('Moteur vectoriel indisponible', true);
+    return exportFailure('pdfx', 'vector engine unavailable');
+  }
 
   const page = activePage();
   const width = Math.max(1, Math.round(state.artboardW));
@@ -5447,19 +5530,20 @@ async function exportPDFX(opts) {
   } catch (e) {
     console.error('[Bird PDF/X]', e);
     toast('PDF/X impossible : ' + (e.message || 'erreur'), true);
-    return null;
+    return exportFailure('pdfx', e.message || 'erreur');
   }
 
   const blob = new Blob([bytes], { type: 'application/pdf' });
+  const filename = base + '-x1a.pdf';
+  if (download) downloadBlob(blob, filename, 'PDF/X-1a exporté ✓');
   if (warnings.length) {
     console.info('[Bird PDF/X] avertissements', warnings);
     toast('PDF/X-1a prêt · ' + warnings.length + ' avertissement(s) en console');
-  } else {
-    toast('PDF/X-1a exporté ✓');
   }
-  if (opts.returnBlob) return { blob, bytes, warnings };
-  downloadBlob(blob, (opts.filename || ('bird-' + timestamp())) + '-x1a.pdf', 'PDF/X-1a exporté ✓');
-  return { blob, bytes, warnings };
+  return exportResult({
+    format: 'pdfx', filename: filename, blob: blob, bytes: bytes,
+    warnings: warnings.slice(), downloaded: download
+  });
 }
 
 function mul3(a, b) {
@@ -5505,12 +5589,15 @@ async function rasterToPdfImage(obj, flipY) {
 /* ── PDF de tous les plans ──
    On installe chaque plan sur le canvas, on en tire un SVG au format exact
    du plan, puis on rend les pages dans un seul document jsPDF. */
-async function exportPagesPDF(opts) {
+async function exportPagesPDF(opts, download, base) {
+  opts = opts || {};
+  if (download === undefined) download = exportWantsDownload(opts);
+  if (base === undefined) base = opts.filename || ('bird-' + timestamp());
   if (!window.BirdIO || !BirdIO.svgPagesToPDF) {
     toast('Moteur PDF indisponible', true);
-    return null;
+    return exportFailure('pdf', 'PDF engine unavailable');
   }
-  if (!state.pages.length) return null;
+  if (!state.pages.length) return exportFailure('pdf', 'no artboard');
   const initialPage = state.activePage;
   const savedVpt = canvas.viewportTransform.slice();
   const savedActive = canvas.getActiveObject();
@@ -5530,7 +5617,7 @@ async function exportPagesPDF(opts) {
   } catch (err) {
     console.error('[Bird export pages]', err);
     toast('Export des plans impossible : ' + (err.message || 'erreur'), true);
-    return null;
+    return exportFailure('pdf', err.message || 'erreur');
   } finally {
     if (state.activePage !== initialPage) await loadPageIntoCanvas(initialPage);
     canvas.setViewportTransform(savedVpt);
@@ -5543,15 +5630,18 @@ async function exportPagesPDF(opts) {
       title: opts.filename || 'Bird',
       subject: state.pages.length + ' plan(s) de travail'
     });
-    if (opts.returnBlob) return result.blob;
-    downloadBlob(result.blob,
-      (opts.filename || ('bird-' + timestamp())) + '-' + result.pages + 'plans.pdf',
-      result.pages + ' plans exportés en PDF ✓');
-    return result.blob;
+    const filename = base + '-' + result.pages + 'plans.pdf';
+    if (download) {
+      downloadBlob(result.blob, filename, result.pages + ' plans exportés en PDF ✓');
+    }
+    return exportResult({
+      format: 'pdf', filename: filename, blob: result.blob,
+      bytes: result.bytes || null, downloaded: download
+    });
   } catch (err) {
     console.error('[Bird export pages]', err);
     toast('Export PDF impossible : ' + (err.message || 'erreur'), true);
-    return null;
+    return exportFailure('pdf', err.message || 'erreur');
   }
 }
 
@@ -5615,22 +5705,17 @@ function downloadBlob(blob, filename, msg) {
   if (msg) toast(msg);
 }
 
-function downloadDataURL(dataURL, filename, msg) {
-  if (nativeShell()) {
-    const comma = dataURL.indexOf(',');
-    const binary = atob(dataURL.slice(comma + 1));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    saveNative(filename, bytes, msg);
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = dataURL;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  toast(msg);
+/* dataURL → Blob sans passer par fetch() : décodage base64 direct. Utilisé par
+   le contrat d'export (le blob accompagne toujours le dataURL) et par le
+   téléchargement natif. */
+function dataURLToBlob(dataURL) {
+  const comma = dataURL.indexOf(',');
+  const meta = dataURL.slice(0, comma);
+  const type = (meta.match(/^data:([^;,]+)/) || [])[1] || 'application/octet-stream';
+  const binary = atob(dataURL.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: type });
 }
 
 function escapeXml(s) {
@@ -5652,20 +5737,32 @@ function nativeShell() {
   return !!(window.BirdNative && BirdNative.ready);
 }
 
+/* Le titre de l'onglet suit la même règle que le DOM : on écrit la SOURCE
+   française, et c'est `js/i18n.js` qui applique la langue courante
+   (`BirdI18n.applyTitle`). Écrire ici le résultat de `t()` faisait passer une
+   traduction pour une écriture de l'application — le retour au français ne
+   revenait alors jamais. */
 function documentTitle(name) {
   const base = 'Bird ' + (Bird.version || '') + ' — Éditeur vectoriel';
-  const full = name ? name + ' — ' + base : base;
-  return window.BirdI18n ? window.BirdI18n.t(full) : full;
+  return name ? name + ' — ' + base : base;
+}
+
+function applyDocumentTitle() {
+  if (window.BirdI18n && BirdI18n.applyTitle) BirdI18n.applyTitle();
+}
+
+/* La barre de titre native est hors du DOM : i18n ne peut pas l'atteindre,
+   c'est le seul endroit où l'on traduit explicitement. */
+function nativeWindowTitle(name) {
+  const t = (s) => (window.BirdI18n ? window.BirdI18n.t(s) : s); // i18n:allow barre native, hors DOM
+  return name ? name + ' — Bird' : 'Bird — ' + t('Éditeur vectoriel');
 }
 
 function setDocumentTitle(name) {
   state.docName = name || null;
-  document.title = documentTitle(name);
-  // La barre de titre native ne suit pas `document.title` : on la pilote.
-  if (nativeShell() && BirdNative.setTitle) {
-    const t = (s) => (window.BirdI18n ? window.BirdI18n.t(s) : s);
-    BirdNative.setTitle(name ? name + ' — Bird' : 'Bird — ' + t('Éditeur vectoriel'));
-  }
+  document.title = documentTitle(state.docName);
+  applyDocumentTitle();
+  if (nativeShell() && BirdNative.setTitle) BirdNative.setTitle(nativeWindowTitle(state.docName));
 }
 
 async function saveFile(opts) {
@@ -6535,7 +6632,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.2.2',
+  version: '2.3.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

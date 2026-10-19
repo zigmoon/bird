@@ -379,6 +379,15 @@ rows, the generated shortcut sheet).
 To add a string: write it in French, then add the pair to `EN` in
 `js/i18n.js`. If the message interpolates values, add a pattern instead.
 
+**A module writes the French source, never the translation.** `js/i18n.js` is
+the only place that calls `t()` on interface text; if a module writes an
+already-translated string into a node or an attribute, i18n takes it for a
+fresh write from the application and freezes it as the new source — switching
+back to French then does nothing. `scripts/check-ui.mjs` fails the build on any
+`BirdI18n.t(` in another module; the two legitimate escapes (the native window
+title, which is outside the DOM, and a value returned by the API) are annotated
+with `i18n:allow <reason>`.
+
 ```
 bird/
 ├── index.html                  UI (stable DOM, reused by Astro and Tauri)
@@ -411,12 +420,9 @@ bird/
 ### JavaScript API
 
 ```js
-Bird.version                                   // '2.2.0'
+Bird.version                                   // '2.3.0'
 Bird.document.new() / .payload() / .load(p)
 Bird.document.open(file)                       // any supported format
-Bird.export({ format: 'pdfx', scope: 'document', returnBlob: true })
-Bird.export({ format: 'pdf', scope: 'pages', returnBlob: true })
-Bird.exportSVG({ background: 'transparent' })
 
 Bird.pages.list() / .count() / .go(n) / .add(name) / .duplicate() / .remove(n)
 Bird.view.rulers(true) / .grid(false) / .snap(true)
@@ -427,6 +433,35 @@ BirdPlugins.list() / .open(id) / .toggle(id)
 Bird.io.pdfPageCount(buffer)                   // { pages, sizes }
 Bird.io.svgPagesToPDF([{ svg, width, height }])
 ```
+
+#### `Bird.export(opts)` — one shape for every format
+
+```js
+const res = await Bird.export({
+  format: 'pdfx',            // 'svg' | 'pdf' | 'pdfx' | 'png' | 'jpg' | 'webp'
+  scope: 'document',         // 'document' | 'selection' | 'pages'
+  scale: 2,                  // raster only
+  background: 'artboard',    // 'artboard' | 'transparent' | 'white'
+  bleed: 0,                  // pdfx only
+  filename: 'poster',        // without extension
+  download: true             // false = return only, do not save
+});
+
+// Always resolves to the same object — never `null`, never a bare Blob:
+//   res.ok          boolean, false on failure
+//   res.format      the format actually produced
+//   res.filename    suggested name, extension included
+//   res.blob        Blob, always present on success
+//   res.bytes       Uint8Array (pdf, pdfx, pages)
+//   res.dataURL     string (png, jpg, webp)
+//   res.warnings    string[] (pdfx: missing ICC profile, skipped object…)
+//   res.downloaded  whether a file was written
+//   res.error       message when ok is false
+```
+
+`returnBlob` / `returnDataURL` are still accepted as aliases of
+`download: false`, so an older call keeps its "do not save" meaning instead of
+silently starting a download.
 
 ---
 
@@ -585,7 +620,7 @@ Two coordinate spaces, and mixing them is silent:
 
 ### UI invariants, checked before every build
 
-`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes four
+`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes five
 regressions that already shipped, each invisible to the developer and obvious to
 the user:
 
@@ -595,8 +630,10 @@ the user:
 | No chromatic colour in CSS, JS or HTML | the active toggle state was blue (`#eef4ff` / `#1677ff`) — outside a design language that is strictly black, white and grey |
 | A file named `*white*` must contain white | `bird-mark-white.svg` contained `#0C0C0F` — the exact colour of the splash panel behind it |
 | Every referenced asset must exist | A deployment package could omit `css/fonts/`; the `@font-face` rules then failed silently and the page fell back to a system font |
+| No module may call `BirdI18n.t()` | a module wrote a translated label into the DOM; i18n read it back as a fresh write and froze it as the source — "Apparence" stayed "Appearance" after switching back to French |
 
-A legitimate exception is written as `check-ui:allow <reason>` on the same line.
+A legitimate exception is written as `check-ui:allow <reason>` (or
+`i18n:allow <reason>` for the last one) on the same line.
 
 ### Caching — the rule that keeps getting forgotten
 

@@ -37,8 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.2.2 — thèmes clair et sombre, bascule jour / nuit':
-      'v2.2.2 — light and dark themes, day / night switch',
+    'v2.3.0 — API d’export unifiée':
+      'v2.3.0 — unified export API',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',
@@ -856,10 +856,30 @@
     }
   }
 
+  /* Le titre de l'onglet n'est pas dans le DOM : ni le TreeWalker ni le
+     MutationObserver ne l'atteignent. Il suit pourtant la même règle que les
+     nœuds de texte — on garde la SOURCE française, on mémorise ce que NOUS
+     avons écrit, et on ne prend une nouvelle source que si quelqu'un d'autre a
+     écrit entre-temps. Sans cela, revenir au français laissait le titre en
+     anglais (la traduction affichée passait pour la source). */
+  function applyTitle() {
+    if (!document.title) return;
+    var current = document.title;
+    if (document.__birdTitleFr === undefined) document.__birdTitleFr = current;
+    else if (current !== document.__birdTitleOut) document.__birdTitleFr = current;
+    var next = translate(document.__birdTitleFr);
+    if (current !== next) {
+      suppress++;
+      document.title = next;
+      suppress--;
+    }
+    document.__birdTitleOut = document.title;
+  }
+
   function applyAll() {
     if (!document.body) return;
     applyElement(document.body);
-    if (document.title) document.title = translate(document.title);
+    applyTitle();
   }
 
   function startObserver() {
@@ -932,6 +952,7 @@
        (une micro-tâche) et l'interface afficherait brièvement la mauvaise
        langue. */
     applyElement: function (el) { if (el && el.nodeType === 1) applyElement(el); },
+    applyTitle: applyTitle,
     set: function (l) { set(l); },
     get: function () { return lang; },
     languages: LANGS.slice(),
