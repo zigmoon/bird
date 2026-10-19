@@ -1,6 +1,6 @@
 [package]
 name = "bird-desktop"
-version = "2.1.0"
+version = "2.1.1"
 description = "Bird — éditeur vectoriel local-first (coquille native)"
 authors = ["Zigmoon"]
 edition = "2021"

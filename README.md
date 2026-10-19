@@ -523,17 +523,33 @@ Two bugs worth remembering, both fixed and documented in the code:
 
 ### UI invariants, checked before every build
 
-`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes three
+`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes four
 regressions that already shipped, each invisible to the developer and obvious to
 the user:
 
 | Check | The bug it prevents |
 |---|---|
 | No literal `stroke`/`fill` colour in CSS | `.btn.is-on svg { stroke: #fff }` survived from the old dark active state; once the active state became light, the icons turned white on white |
+| No chromatic colour in CSS, JS or HTML | the active toggle state was blue (`#eef4ff` / `#1677ff`) — outside a design language that is strictly black, white and grey |
 | A file named `*white*` must contain white | `bird-mark-white.svg` contained `#0C0C0F` — the exact colour of the splash panel behind it |
 | Every referenced asset must exist | A deployment package could omit `css/fonts/`; the `@font-face` rules then failed silently and the page fell back to a system font |
 
 A legitimate exception is written as `check-ui:allow <reason>` on the same line.
+
+### Caching — the rule that keeps getting forgotten
+
+Every asset is requested with a version key: `css/style.css?v=2.1.1`,
+`icons/bird-mark.svg?v=2.1.1`, down to the small tool icons. Two successive
+omissions left an old logo on screen: the Astro service worker serves
+`/assets/**` **cache-first**, and `.htaccess` caches SVG for a month. A URL
+without `?v=` is therefore immutable in the visitor's browser.
+
+Three moves go together whenever an asset changes:
+
+1. bump that asset's `?v=` ;
+2. bump `CACHE` in `astro/public/sw.js` (`bird-v2.1.1`) — otherwise returning
+   visitors keep the old file;
+3. re-run `node scripts/pack-ftp.mjs` so the static package follows.
 
 ### Packaging for a static server
 

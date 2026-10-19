@@ -39,7 +39,7 @@ Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox
 
 | Domaine | Ce qui change |
 |---|---|
-| **Identité** | Nouveau logo Bird (vol de cinq oiseaux) : écran de démarrage, barre haute, aperçu du plan de travail vide, favicon et icônes PWA 192/512. |
+| **Identité** | Logo Bird (vol de cinq oiseaux) : écran de démarrage, **barre haute**, **pop-in de reprise de document**, aperçu du plan de travail vide, favicon et icônes PWA 192/512. Sur le splash, le panneau noir ne porte que la typographie — le logo vit au centre, sur le gris. |
 | **Barre haute** | Grammaire SuperPrint : fichiers à gauche, outils **centrés sur la fenêtre**, zoom + `EXPORT` + réglages à droite. |
 | **Bascules de vue** | Règles, grille et magnétisme deviennent des boutons à état (`aria-pressed`) synchronisés avec le panneau Document et le clavier. |
 | **Règles** | Le plan de travail commence **après** les règles : plus de zone de dessin cachée sous la graduation. Bulle de valeur pendant le glissement, `Échap` annule, dépôt accepté sur toute la scène, double-clic sur le coin efface les repères. |
@@ -372,9 +372,9 @@ bird/
 ├── icons/
 │   ├── bird-logo.svg          logo complet (5 oiseaux) — splash
 │   ├── bird-logo-gray.svg     logo complet en gris clair — aperçu du plan vide
-│   ├── bird-mark.svg          marque seule — barre haute
-│   ├── bird-mark-white.svg    marque inversée — panneaux sombres
-│   ├── favicon.svg            favicon (carré arrondi + marque centrée)
+│   ├── bird-mark.svg          logo seul — barre haute et pop-in de reprise
+│   ├── bird-mark-white.svg    logo inversé — panneaux sombres
+│   ├── favicon.svg            favicon (carré arrondi + logo centré)
 │   └── icon-180/192/512.png   icônes PWA
 ├── js/
 │   ├── fabric.min.js          moteur canvas (Fabric.js 5.1)
@@ -545,16 +545,32 @@ Les bibliothèques PDF/EPS ne sont téléchargées qu’au premier import ou exp
 Les préférences d’interface (widgets détachés, plug-ins actifs, réglages de plug-ins) vivent dans `localStorage` et n’entrent jamais dans le fichier projet.
 ### Invariants d’interface, vérifiés avant chaque build
 
-`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode trois
+`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode quatre
 régressions déjà livrées, invisibles côté code et évidentes côté utilisateur :
 
 | Contrôle | Le bug qu’il empêche |
 |---|---|
 | Aucune couleur `stroke`/`fill` littérale dans le CSS | `.btn.is-on svg { stroke: #fff }` avait survécu à l’ancien état actif sombre ; l’état étant devenu clair, les icônes étaient blanches sur fond blanc |
+| Aucune couleur chromatique dans le CSS, le JS ou le HTML | l’état actif des bascules était bleu (`#eef4ff` / `#1677ff`) : hors DA, noir, blanc et gris |
 | Un fichier nommé `*white*` doit contenir du blanc | `bird-mark-white.svg` contenait `#0C0C0F`, exactement la couleur du panneau du splash derrière lui |
 | Tout asset référencé doit exister | Un paquet de déploiement pouvait omettre `css/fonts/` ; les `@font-face` échouaient en silence et la page retombait sur une police système |
 
 Une exception légitime s’écrit `check-ui:allow <raison>` sur la même ligne.
+
+### Cache : la règle à ne pas oublier
+
+Chaque asset est appelé avec une clé de version — `css/style.css?v=2.1.1`,
+`icons/bird-mark.svg?v=2.1.1`, y compris les petites icônes d’outils. Deux
+oublis successifs ont laissé un ancien logo à l’écran : le service worker de la
+version Astro sert `/assets/**` en **cache-first**, et `.htaccess` cache les SVG
+un mois. Une URL sans `?v=` est donc immuable chez le visiteur.
+
+Trois gestes vont ensemble à chaque changement d’asset :
+
+1. changer le `?v=` de l’asset concerné ;
+2. changer `CACHE` dans `astro/public/sw.js` (`bird-v2.1.1`) — sans quoi les
+   visiteurs déjà venus gardent l’ancien fichier ;
+3. relancer `node scripts/pack-ftp.mjs` pour que le paquet statique suive.
 
 ### Empaqueter pour un serveur statique
 

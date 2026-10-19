@@ -1,5 +1,8 @@
 /* Bird — service worker (PWA local-first) */
-const CACHE = 'bird-v1.5.0';
+/* Toute modification d'un asset versionné doit changer ce nom : sinon les
+   visiteurs déjà passés gardent l'ancien fichier, servi en cache-first.
+   C'est ce qui laissait l'ancien logo dans la barre haute. */
+const CACHE = 'bird-v2.1.1';
 const PRECACHE = [
   '/',
   '/editor',

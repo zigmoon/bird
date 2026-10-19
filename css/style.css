@@ -94,7 +94,7 @@ button { cursor: pointer; }
 }
 .splash-logo { width: 140px; height: auto; margin-bottom: 12px; }
 .splash-brand-big {
-  font-size: 24px; font-weight: 900; letter-spacing: 3px; line-height: 1.05;
+  font-size: 34px; font-weight: 900; letter-spacing: 5px; line-height: 1;
 }
 .splash-media {
   background: #f5f5f5;
@@ -1314,18 +1314,15 @@ input[type="range"]::-webkit-slider-thumb {
 .plugin-check input { accent-color: #1a1a1a; }
 
 /* ═══════════════════════════════════════════════════════════════
-   SPLASH — nouveau logo
+   SPLASH — le logo complet vit au centre, sur le gris.
+   Le panneau noir ne porte QUE la typographie : une icône à côté d'un mot
+   déjà écrit en gros faisait doublon. La taille du mot est réglée sur la
+   règle de base (plus haut) pour que la version mobile la réduise encore.
    ═══════════════════════════════════════════════════════════════ */
-.splash-logo-panel {
-  justify-content: space-between !important;
-}
-.splash-panel-mark {
-  width: 84px; height: auto; display: block;
-  margin-bottom: 18px; opacity: .95;
-}
+.splash-logo-panel { justify-content: center !important; }
 .splash-brand-sub {
   font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
-  color: rgba(255,255,255,.55); margin-top: 6px;
+  color: rgba(255,255,255,.55); margin-top: 10px;
 }
 .splash-media .splash-logo-big {
   width: 76%; max-width: 420px; height: auto; object-fit: contain;
