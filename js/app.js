@@ -22,7 +22,7 @@ const HANDLE_R = 3;
 const ANCHOR_R = 4;
 const HIT_R = 9;
 const CURVE_T = 4;
-const PREVIEW = '#4f8cff';
+const PREVIEW = '#1a1a1a'; // tracés d'aperçu (plume, points) : noir, DA monochrome
 
 /* ────────────────────────────────────────────────────────────
    ÉTAT GLOBAL
@@ -107,8 +107,8 @@ const state = {
   iccProfile: null,           // { bytes, name, components } chargé par l'utilisateur
   pdfxBleed: 0,               // fond perdu en px
 
-  // nuancier (persistant)
-  swatches: ['#000000','#ffffff','#1a1a1a','#4f8cff','#ff6b6b','#4ade80','#facc15','#c084fc','#f97316','#22d3ee','#94a3b8','#ef4444'],
+  // nuancier (persistant) — couleurs de l'ŒUVRE, pas de l'interface
+  swatches: ['#000000','#ffffff','#1a1a1a','#4f8cff','#ff6b6b','#4ade80','#facc15','#c084fc','#f97316','#22d3ee','#94a3b8','#ef4444'], // check-ui:allow nuancier utilisateur
 
   // historique
   undo: [],
@@ -151,9 +151,9 @@ const els = {
 ════════════════════════════════════════════════════════════ */
 function init() {
   fabric.Object.prototype.set({
-    borderColor: '#1677ff',
+    borderColor: '#1a1a1a',
     cornerColor: '#ffffff',
-    cornerStrokeColor: '#1677ff',
+    cornerStrokeColor: '#1a1a1a',
     cornerSize: 7,
     touchCornerSize: 18,
     transparentCorners: false,
@@ -493,7 +493,7 @@ function bindSidebars() {
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           // flash visuel
           target.style.transition = 'background .5s';
-          target.style.background = '#f0f5ff';
+          target.style.background = '#ececec';
           setTimeout(() => { target.style.background = 'transparent'; }, 600);
         }
         // rend la section texte visible si sélection d'un texte
@@ -827,8 +827,8 @@ function onSelection() {
   }
   // synchroniser les champs (sélection multiple : premier objet comme référence)
   const styleObj = (obj.type === 'activeSelection' && obj._objects && obj._objects.length) ? obj._objects[0] : obj;
-  els.fillColor.value = colorInputValue(styleObj.fill, '#4f8cff');
-  els.strokeColor.value = colorInputValue(styleObj.stroke, '#141821');
+  els.fillColor.value = colorInputValue(styleObj.fill, '#1a1a1a');
+  els.strokeColor.value = colorInputValue(styleObj.stroke, '#1a1a1a');
   els.strokeWidth.value = styleObj.strokeWidth || 2;
   els.strokeWidthVal.textContent = styleObj.strokeWidth || 2;
   els.opacity.value = Math.round((obj.opacity ?? 1) * 100);
@@ -1338,7 +1338,7 @@ function drawPenPreview(pending, cursor) {
     addPenTemp(g);
     if (state.penPoints.length > 2 && dist(cursor, state.penPoints[0]) < CLOSE_THRESHOLD * 1.5) {
       const fp = state.penPoints[0];
-      addPenTemp(new fabric.Circle({ left: fp.x - 8 * uiScale, top: fp.y - 8 * uiScale, radius: 8 * uiScale, fill: 'rgba(79,140,255,0.12)', stroke: PREVIEW, strokeWidth: uiScale, selectable: false, evented: false }));
+      addPenTemp(new fabric.Circle({ left: fp.x - 8 * uiScale, top: fp.y - 8 * uiScale, radius: 8 * uiScale, fill: 'rgba(26,26,26,0.1)', stroke: PREVIEW, strokeWidth: uiScale, selectable: false, evented: false }));
     }
   }
 
@@ -1348,10 +1348,13 @@ function drawPenPreview(pending, cursor) {
     drawHandle(pt, 'hOut', uiScale);
     const isFirst = i === 0;
     const isSel = i === state.penSelected;
-    const fill = isSel ? '#ff4d4d' : (isFirst ? PREVIEW : '#ffffff');
+    /* Point plein = point sélectionné, point creux = non sélectionné.
+       L'ancien code distinguait ces deux états par la couleur (rouge/bleu) ;
+       en monochrome c'est le remplissage qui porte l'information. */
+    const fill = isSel ? '#1a1a1a' : (isFirst ? PREVIEW : '#ffffff');
     addPenTemp(new fabric.Circle({
       left: pt.x - ANCHOR_R * uiScale, top: pt.y - ANCHOR_R * uiScale, radius: ANCHOR_R * uiScale,
-      fill: fill, stroke: isSel ? '#ff4d4d' : PREVIEW, strokeWidth: (isSel ? 1.5 : 1) * uiScale,
+      fill: fill, stroke: '#1a1a1a', strokeWidth: (isSel ? 1.5 : 1) * uiScale,
       selectable: false, evented: false
     }));
   });
@@ -2462,7 +2465,7 @@ function bindProps() {
   });
   els.fontFamily.addEventListener('change', () => applyToSelection('fontFamily', els.fontFamily.value));
 
-  els.fillNone.addEventListener('click', () => { els.fillColor.value = '#4f8cff'; applyToSelection('fill', null); updateFillChips(appearanceTarget()); });
+  els.fillNone.addEventListener('click', () => { els.fillColor.value = '#1a1a1a'; applyToSelection('fill', null); updateFillChips(appearanceTarget()); });
   els.strokeNone.addEventListener('click', () => { applyToSelection('stroke', null); updateFillChips(appearanceTarget()); });
 
   // texte
@@ -6088,10 +6091,10 @@ function snap45(origin, target) {
 }
 
 function currentFill() {
-  return els.fillColor.value || '#4f8cff';
+  return els.fillColor.value || '#1a1a1a';
 }
 function currentStroke() {
-  return els.strokeColor.value || '#141821';
+  return els.strokeColor.value || '#1a1a1a';
 }
 function currentStrokeW() {
   return parseFloat(els.strokeWidth.value) || 2;
@@ -6211,7 +6214,7 @@ function updateRulers() {
       }
     }
     // Repères
-    ctx.strokeStyle = 'rgba(22,119,255,.75)';
+    ctx.strokeStyle = 'rgba(26,26,26,.75)';
     state.guides.forEach(g => {
       // Une règle horizontale marque les repères verticaux (x), et inversement.
       if (horizontal ? g.axis !== 'x' : g.axis !== 'y') return;
@@ -6466,7 +6469,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.0.0',
+  version: '2.1.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

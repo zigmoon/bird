@@ -13,6 +13,10 @@
  *   3. Un paquet de déploiement pouvait omettre `css/fonts/` : les @font-face
  *      pointaient vers des fichiers absents et le site retombait en silence
  *      sur une police système.
+ *   4. Une teinte bleue (#1677ff / #eef4ff) s'était glissée dans l'état actif
+ *      des bascules, les listes de calques, les pages et les repères. La DA de
+ *      Bird est monochrome : un état actif se lit par un enfoncement gris, pas
+ *      par une couleur. Ce contrôle rend la dérive impossible.
  *
  * Chaque contrôle encode la cause, pas le symptôme. Une exception légitime
  * s'écrit en commentaire `check-ui:allow <raison>` sur la même ligne que la
@@ -137,9 +141,67 @@ function checkReferences() {
   }
 }
 
+/* ── 4. Direction artistique monochrome ──────────────────────
+   Bird est noir, blanc et gris. Aucune teinte ne doit apparaître dans
+   l'interface : ni état actif, ni liste de calques, ni repère, ni focus.
+   Une couleur chromatique se repère à l'écart entre ses canaux : sur un
+   gris, max(R,G,B) - min(R,G,B) vaut 0. Au-delà de 8, c'est une teinte.
+
+   Seule exception structurelle : le nuancier de l'utilisateur (les couleurs
+   avec lesquelles il peint son œuvre, pas celles de l'interface), déclaré
+   avec `check-ui:allow`. */
+const MONO_TOLERANCE = 8;
+const MONO_FILES = [
+  ['css/style.css', true],
+  ['js/app.js', false],
+  ['index.html', false],
+];
+
+function chromaticChannels(hex) {
+  let h = hex.slice(1);
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6 && h.length !== 8) return null;
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+}
+
+function checkMonochrome() {
+  for (const [rel, stripCssComments] of MONO_FILES) {
+    const file = path.join(root, rel);
+    if (!fs.existsSync(file)) continue;
+    const raw = fs.readFileSync(file, 'utf8');
+    const text = stripCssComments
+      ? raw.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+      : raw;
+    const lines = raw.split('\n');
+
+    for (const [index, line] of text.split('\n').entries()) {
+      if (line.includes('check-ui:allow')) continue;
+      const found = [];
+      for (const m of line.matchAll(/#([0-9a-fA-F]{3,8})\b/g)) {
+        const rgb = chromaticChannels(m[0]);
+        if (rgb && Math.max(...rgb) - Math.min(...rgb) > MONO_TOLERANCE) found.push(m[0]);
+      }
+      for (const m of line.matchAll(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g)) {
+        const rgb = [m[1], m[2], m[3]].map(Number);
+        if (Math.max(...rgb) - Math.min(...rgb) > MONO_TOLERANCE) found.push(m[0] + ')');
+      }
+      if (found.length) {
+        errors.push(
+          `${rel}:${index + 1} — couleur non monochrome : ${found.join(', ')}\n` +
+          '    ' + (lines[index] || '').trim() + '\n' +
+          '    La DA est strictement noir / blanc / gris. Exprimer un état par un fond gris,\n' +
+          '    un bord plus sombre ou une inversion noir↔blanc — jamais par une teinte.\n' +
+          '    Si c’est volontaire : ajouter « check-ui:allow <raison> » en commentaire sur cette ligne.'
+        );
+      }
+    }
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
+checkMonochrome();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -147,5 +209,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, icônes « white », références d’assets');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets');
 for (const n of notes) console.log('  · ' + n);

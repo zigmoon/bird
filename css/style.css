@@ -258,7 +258,7 @@ button { cursor: pointer; }
   font-weight: 700; font-size: 13px;
   letter-spacing: 1.5px; color: #1a1a1a;
 }
-.doc-dirty { color: #1677ff; font-size: 10px; }
+.doc-dirty { color: #1a1a1a; font-size: 10px; }
 
 .sep { width: 1px; height: 20px; background: #e5e5e5; margin: 0 6px; flex: 0 0 auto; }
 .zoom-cluster { display: flex; align-items: center; gap: 0; }
@@ -297,13 +297,17 @@ button { cursor: pointer; }
 .btn-square { width: 30px; height: 30px; padding: 0; flex: 0 0 auto; }
 .btn-square > svg { width: 15px; height: 15px; }
 /* État actif d'une bascule (Règles, Grille, Magnétisme).
-   La couleur de texte pilote l'icône via currentColor — surtout PAS de
-   `stroke` forcé ici : l'état actif a un fond clair, et un trait blanc sur
-   fond clair rend l'icône invisible. C'était un vestige de l'ancien état
-   actif sombre (fond #1a1a1a, icône blanche). Une seule règle, une seule
-   source de couleurs. */
-.btn.is-on { background: #eef4ff; border-color: #cfe1ff; color: #1677ff; }
-.btn.is-on:hover, .btn.is-on:active { background: #e3edff; border-color: #cfe1ff; }
+   La direction artistique est strictement monochrome : un état actif ne se
+   signale JAMAIS par une teinte — ni bleu, ni vert, ni rouge. Il se lit par
+   un enfoncement : fond gris, bord plus sombre, ombre interne, icône noire.
+   La couleur de texte pilote l'icône via currentColor, donc surtout PAS de
+   `stroke` forcé ici : un trait littéral finit toujours par se retrouver sur
+   un fond de la même couleur (c'est arrivé deux fois). */
+.btn.is-on {
+  background: #e2e2e2; border-color: #adadad; color: #1a1a1a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+}
+.btn.is-on:hover, .btn.is-on:active { background: #d9d9d9; border-color: #9e9e9e; }
 .btn-primary {
   background: #1a1a1a; color: #fff; border-color: #1a1a1a;
   font-weight: 700; letter-spacing: 1.2px;
@@ -586,7 +590,7 @@ kbd {
   content: '';
   position: absolute; right: 6px; bottom: 6px;
   width: 4px; height: 4px; border-radius: 50%;
-  background: #1677ff;
+  background: #1a1a1a;
 }
 .rightbar-icon-btn:hover { opacity: 1; background: #f5f5f5; }
 .rightbar-icon-btn.active { opacity: 1; background: #f0f0f0; }
@@ -651,21 +655,24 @@ kbd {
   background: #fff; border: 1px solid #e0e0e0;
   border-radius: 3px; cursor: pointer;
 }
-/* Commandes explicites de suppression de fond ou de contour. */
+/* Commandes explicites de suppression de fond ou de contour.
+   Monochrome strict : la barre « supprimer » n'est plus rouge, elle est noire.
+   L'état actif inverse le bouton (fond noir, glyphe blanc), comme les autres
+   bascules de l'application. */
 .appearance-none {
   width: 26px; height: 26px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   background: #fff; color: #555;
   border: 1px solid #d5d5d5; border-radius: 3px;
-  /* Le carré reste neutre, seule la barre « supprimer » est rouge : deux
+  /* Le carré reste neutre, seule la barre « supprimer » est noire : deux
      tons assumés, donc la couleur du trait ne peut pas venir de currentColor.
      Elle vit ici, en un seul endroit, plutôt que dans la règle du tracé. */
-  --none-accent: #d92727;
+  --none-accent: #1a1a1a;
 }
 .appearance-none svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.25; }
 .appearance-none svg path { stroke: var(--none-accent); stroke-width: 1.7; }
 .appearance-none:hover { background: #f5f5f5; border-color: #a8a8a8; color: #1a1a1a; }
-.appearance-none.on { background: #fff0f0; border-color: #d92727; color: #a81919; }
+.appearance-none.on { background: #1a1a1a; border-color: #1a1a1a; color: #fff; --none-accent: #fff; }
 
 input[type="range"] {
   flex: 1; -webkit-appearance: none; appearance: none;
@@ -708,7 +715,7 @@ input[type="range"]::-webkit-slider-thumb {
 .brush-sample--marker::before { height: 7px; opacity: .42; transform: rotate(-8deg); }
 .brush-sample--spray { background: radial-gradient(circle at 25% 50%, currentColor 0 1px, transparent 1.5px), radial-gradient(circle at 55% 25%, currentColor 0 1px, transparent 1.5px), radial-gradient(circle at 72% 70%, currentColor 0 1px, transparent 1.5px); background-size: 9px 8px; }
 .brush-sample--spray::before { display: none; }
-.brush-sample--neon::before { height: 2px; box-shadow: 0 0 4px 2px #1677ff; }
+.brush-sample--neon::before { height: 2px; box-shadow: 0 0 4px 2px currentColor; }
 .toggle-row { display: flex; align-items: center; min-height: 28px; font-size: 10px; color: #555; cursor: pointer; }
 .toggle-row input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle-track { margin-left: auto; width: 28px; height: 16px; border-radius: 10px; background: #d8d8d8; position: relative; transition: background .15s; }
@@ -784,7 +791,7 @@ input[type="range"]::-webkit-slider-thumb {
   margin-left: auto; white-space: nowrap;
   font-size: 9px; font-weight: 700; letter-spacing: 0.6px;
   padding: 4px 8px; border-radius: 20px;
-  background: #eef7ee; color: #1a7a2e;
+  background: #1a1a1a; color: #fff;
 }
 .settings-foot {
   padding-top: 12px; text-align: center;
@@ -856,8 +863,11 @@ input[type="range"]::-webkit-slider-thumb {
 .ai-access { display: grid; grid-template-columns: .72fr 1fr 34px; align-items: end; gap: 6px; margin-top: 16px; }
 .ai-access .btn { width: 34px; height: 34px; }
 .ai-security { margin-top: 7px; font-size: 8.5px; line-height: 1.5; opacity: .48; }
-.ai-status { min-height: 18px; margin-top: 10px; font-size: 9px; line-height: 1.5; }
-.ai-status.error { color: #a12622; }
+/* Statut de l'assistant : le texte courant est secondaire (gris), une erreur
+   passe en noir gras. Pas de rouge — la DA est monochrome ; c'est le poids
+   typographique qui porte l'alerte. */
+.ai-status { min-height: 18px; margin-top: 10px; font-size: 9px; line-height: 1.5; color: #767676; }
+.ai-status.error { color: #1a1a1a; font-weight: 700; }
 .ai-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; padding-top: 14px; border-top: 1px solid #ededed; }
 .ai-generate { min-width: 190px; }
 .ai-spinner { display: none; width: 11px; height: 11px; border: 1.5px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: aiSpin .7s linear infinite; }
@@ -1025,16 +1035,19 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .stage.rulers-off .ruler, .stage.rulers-off .ruler-corner { display: none; }
 .guides-layer { position: absolute; inset: 0; pointer-events: none; z-index: 24; }
-.guide { position: absolute; background: #1677ff; opacity: .55; pointer-events: auto; }
+/* Repères : noir et blanc uniquement. Un repère noir à 50 % reste lisible sur
+   le plan de travail blanc, et le libellé s'inverse (fond noir, texte blanc)
+   pour ne jamais se confondre avec le trait. */
+.guide { position: absolute; background: #1a1a1a; opacity: .5; pointer-events: auto; }
 .guide:hover { opacity: 1; }
 .guide--x { top: 0; bottom: 0; width: 1px; cursor: ew-resize; }
 .guide--y { left: 0; right: 0; height: 1px; cursor: ns-resize; }
 .guide-label {
-  position: absolute; z-index: 27; background: #1677ff; color: #fff;
+  position: absolute; z-index: 27; background: #1a1a1a; color: #fff;
   font-size: 9px; padding: 1px 4px; border-radius: 2px; transform: translate(4px, -18px);
   pointer-events: none; white-space: nowrap;
 }
-.guide-temp { position: absolute; z-index: 24; background: #1677ff; opacity: .45; pointer-events: none; }
+.guide-temp { position: absolute; z-index: 24; background: #1a1a1a; opacity: .35; pointer-events: none; }
 .guide-temp.guide--x { top: 0; bottom: 0; width: 1px; }
 .guide-temp.guide--y { left: 0; right: 0; height: 1px; }
 
@@ -1053,7 +1066,7 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid transparent;
 }
 .layer-row:hover { background: #f6f6f6; }
-.layer-row.active { background: #eef4ff; border-color: #d6e4ff; }
+.layer-row.active { background: #ececec; border-color: #c9c9c9; }
 .layer-row.is-hidden .layer-name { opacity: .38; text-decoration: line-through; }
 .layer-name {
   flex: 1 1 auto; min-width: 0; font-size: 10px; letter-spacing: .2px;
@@ -1070,7 +1083,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 3px; padding: 0; font-size: 11px; line-height: 1;
 }
 .layer-btn:hover { background: #e9e9e9; }
-.layer-btn.on { color: #1677ff; background: #eef4ff; }
+.layer-btn.on { color: #1a1a1a; background: #e0e0e0; }
 .layer-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1100,7 +1113,7 @@ input[type="range"]::-webkit-slider-thumb {
 .export-readout b { font-size: 12px; color: #1a1a1a; letter-spacing: .4px; height: 30px; display: flex; align-items: center; }
 .export-note { margin: 0; font-size: 9.5px; line-height: 1.5; color: #777; }
 .export-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.export-item--more { border-top: 1px solid #eee; margin-top: 3px; padding-top: 8px; color: #1677ff; }
+.export-item--more { border-top: 1px solid #eee; margin-top: 3px; padding-top: 8px; color: #1a1a1a; }
 
 /* Respect strict de l'attribut hidden (sinon .field-row { display:flex } l'écrase). */
 [hidden] { display: none !important; }
@@ -1131,7 +1144,7 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 3px 5px; border-radius: 2px; white-space: nowrap;
   transform: translate(8px, -18px);
 }
-.guide.dragging { background: #1677ff; opacity: 1; }
+.guide.dragging { background: #1a1a1a; opacity: 1; }
 .ruler-corner:hover { background: #efefef; }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1166,8 +1179,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .sp-widget.is-pulse { animation: spWidgetPulse .5s ease-out; }
 @keyframes spWidgetPulse {
-  0%   { box-shadow: 0 0 0 0 rgba(22,119,255,.35), 0 10px 30px rgba(0,0,0,.16); }
-  100% { box-shadow: 0 0 0 10px rgba(22,119,255,0), 0 10px 30px rgba(0,0,0,.16); }
+  0%   { box-shadow: 0 0 0 0 rgba(26, 26, 26, .3), 0 10px 30px rgba(0, 0, 0, .16); }
+  100% { box-shadow: 0 0 0 10px rgba(26, 26, 26, 0), 0 10px 30px rgba(0, 0, 0, .16); }
 }
 .sp-widget-head {
   display: flex; align-items: center; gap: 6px;
@@ -1225,7 +1238,7 @@ input[type="range"]::-webkit-slider-thumb {
 .plugin-version { font-size: 8px; color: #bbb; letter-spacing: .04em; }
 .plugin-badge {
   font-size: 7.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  padding: 2px 4px; border-radius: 2px; background: #eef4ff; color: #1677ff;
+  padding: 2px 4px; border-radius: 2px; background: #1a1a1a; color: #fff;
 }
 .plugin-badge.is-builtin { background: #f3f3f3; color: #888; }
 .plugin-desc { font-size: 9px; line-height: 1.5; color: #888; margin: 0; }
@@ -1357,16 +1370,16 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid transparent;
 }
 .page-row:hover { background: #f7f7f7; }
-.page-row.is-active { background: #f0f5ff; border-color: #d6e4ff; }
+.page-row.is-active { background: #ececec; border-color: #c9c9c9; }
 .page-num {
   flex: 0 0 auto; width: 17px; height: 17px; border-radius: 3px;
   background: #f0f0f0; color: #666;
   font-size: 9px; display: flex; align-items: center; justify-content: center;
 }
-.page-row.is-active .page-num { background: #1677ff; color: #fff; }
+.page-row.is-active .page-num { background: #1a1a1a; color: #fff; }
 .page-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .page-name { font-size: 11px; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.page-name[contenteditable="true"] { outline: 1px solid #1677ff; border-radius: 2px; padding: 0 2px; }
+.page-name[contenteditable="true"] { outline: 1px solid #1a1a1a; border-radius: 2px; padding: 0 2px; }
 .page-meta { font-size: 8.5px; color: #9a9a9a; font-family: 'IBM Plex Mono', monospace; }
 .page-tools { display: flex; gap: 1px; opacity: 0; transition: opacity .12s; }
 .page-row:hover .page-tools, .page-row.is-active .page-tools { opacity: 1; }
@@ -1376,7 +1389,10 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .page-tool:hover:not(:disabled) { background: #e9e9e9; color: #1a1a1a; }
 .page-tool:disabled { opacity: .25; cursor: default; }
-.page-del:hover:not(:disabled) { background: #fdecec; color: #c0392b; }
+/* Suppression d'une page : l'inversion noir/blanc remplace le rouge. C'est le
+   seul signal « destructif » disponible dans une DA monochrome, et il est plus
+   lisible que le rouge sur fond clair. */
+.page-del:hover:not(:disabled) { background: #1a1a1a; color: #fff; }
 
 /* Sélecteur flottant : visible dès deux plans */
 .page-switcher {
@@ -1420,7 +1436,7 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer; font-size: 11px;
 }
 .pdf-page-option:hover { background: #fafafa; }
-.pdf-page-option input { margin-top: 2px; accent-color: #1677ff; }
+.pdf-page-option input { margin-top: 2px; accent-color: #1a1a1a; }
 .pdf-page-option span { display: flex; flex-direction: column; gap: 1px; }
 .pdf-page-option b { font-weight: 500; }
 .pdf-page-option small { color: #8a8a8a; font-size: 9.5px; }
@@ -1473,8 +1489,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .zoom-widget #zoomReadout:hover { background: #f7f7f7; border-color: #e6e6e6; }
 .zoom-widget #zoomReadout:focus {
-  outline: none; background: #fff; border-color: #1677ff;
-  box-shadow: 0 0 0 2px rgba(22, 119, 255, .15);
+  outline: none; background: #fff; border-color: #1a1a1a;
+  box-shadow: 0 0 0 2px rgba(26, 26, 26, .16);
 }
 /* La sidebar de droite est ouverte : on lit sa largeur réelle. */
 .props:not(.collapsed) ~ .expand-btn { display: block; }
@@ -1494,8 +1510,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .export-print-tag {
   font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: .04em;
-  text-transform: none; color: #1677ff; background: #eef4ff;
-  border: 1px solid #d8e6ff; border-radius: 3px; padding: 1px 5px;
+  text-transform: none; color: #1a1a1a; background: #f0f0f0;
+  border: 1px solid #d5d5d5; border-radius: 3px; padding: 1px 5px;
 }
 .export-print .export-grid { grid-template-columns: repeat(2, 1fr); gap: 9px 10px; }
 .export-icc {
@@ -1523,7 +1539,9 @@ input[type="range"]::-webkit-slider-thumb {
 .symbol-row:hover, .font-row:hover { background: #f7f7f7; border-color: #eee; }
 .font-row .font-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .font-row .font-glyphs { font-family: 'IBM Plex Mono', monospace; font-size: 8.5px; color: #9a9a9a; }
-.font-row.is-missing { color: #a12622; }
+/* Police absente : signalée par l'italique et un affaiblissement, pas par une
+   teinte. Une couleur d'alerte serait le seul élément coloré de l'interface. */
+.font-row.is-missing { color: #1a1a1a; font-style: italic; opacity: .5; }
 .symbol-row .symbol-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-inline { font-size: 9.5px; color: #aaa; padding: 4px 2px; }
 
