@@ -186,6 +186,15 @@ function init() {
     const x = vpt[4], y = vpt[5];
     const w = this.__plume.artW * vpt[0];
     const h = this.__plume.artH * vpt[3];
+    /* Tout trait d'un pixel doit être calé sur la grille des pixels PHYSIQUES.
+       Le décalage de 0,5 px CSS n'aligne un trait que lorsque le DPR vaut 1 :
+       à 1,5 (ou 2), un trait de 1 px CSS couvre 1,5 pixel physique et bave sur
+       deux pixels. Et comme le zoom laisse une origine fractionnaire, la
+       répartition de ce flou change à chaque cran — le cadre du plan semblait
+       se décaler tout seul. */
+    const dpr = typeof this.getRetinaScaling === 'function' ? this.getRetinaScaling() : 1;
+    const half = 0.5 / dpr;
+    const snap = (v) => Math.round(v * dpr) / dpr + half;
     // Fond du plan de travail (si fond transparent choisi, on ne peint rien)
     if (this.__plume.artColor && this.__plume.artColor !== 'transparent') {
       ctx.fillStyle = this.__plume.artColor;
@@ -201,25 +210,27 @@ function init() {
         ctx.rect(x, y, w, h);
         ctx.clip();
         ctx.strokeStyle = 'rgba(26,26,26,0.08)';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 / dpr;
         ctx.beginPath();
         for (let gx = 0; gx <= this.__plume.artW; gx += st.gridSize) {
-          const px = Math.round(x + gx * vpt[0]) + 0.5;
+          const px = snap(x + gx * vpt[0]);
           ctx.moveTo(px, y); ctx.lineTo(px, y + h);
         }
         for (let gy = 0; gy <= this.__plume.artH; gy += st.gridSize) {
-          const py = Math.round(y + gy * vpt[3]) + 0.5;
+          const py = snap(y + gy * vpt[3]);
           ctx.moveTo(x, py); ctx.lineTo(x + w, py);
         }
         ctx.stroke();
         ctx.restore();
       }
     }
-    // Léger filé en pointillé définissant le format (discret mais visible)
-    ctx.strokeStyle = 'rgba(26,26,26,0.16)';
-    ctx.lineWidth = 1;
+    // Léger filé en pointillé définissant le format (discret mais visible).
+    const left = snap(x), top = snap(y);
+    const right = snap(x + w), bottom = snap(y + h);
+    ctx.strokeStyle = 'rgba(26,26,26,0.22)';
+    ctx.lineWidth = 1 / dpr;
     ctx.setLineDash([4, 5]);
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.strokeRect(left, top, right - left, bottom - top);
     ctx.setLineDash([]);
     ctx.restore();
   };
@@ -6469,7 +6480,7 @@ window.addEventListener('resize', resizeCanvas);
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.1.1',
+  version: '2.1.2',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

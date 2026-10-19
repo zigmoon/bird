@@ -74,7 +74,7 @@ fn set_window_title(window: tauri::WebviewWindow, title: String) {
    ════════════════════════════════════════════════════════════ */
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| format!("Lecture de {path} impossible : {e}"))
+    std::fs::read_to_string(&path).map_err(|e| format!("Cannot read {path}: {e}"))
 }
 
 #[tauri::command]
@@ -84,13 +84,13 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[tauri::command]
 fn write_binary_file(path: String, base64: String) -> Result<(), String> {
-    let bytes = base64_decode(&base64).ok_or_else(|| "Contenu base64 invalide".to_string())?;
+    let bytes = base64_decode(&base64).ok_or_else(|| "Invalid base64 content".to_string())?;
     write_bytes(&path, &bytes)
 }
 
 #[tauri::command]
 fn read_binary_file(path: String) -> Result<String, String> {
-    let bytes = std::fs::read(&path).map_err(|e| format!("Lecture de {path} impossible : {e}"))?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("Cannot read {path}: {e}"))?;
     Ok(base64_encode(&bytes))
 }
 
@@ -98,10 +98,10 @@ fn write_bytes(path: &str, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = std::path::Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Dossier {} impossible à créer : {e}", parent.display()))?;
+                .map_err(|e| format!("Cannot create folder {}: {e}", parent.display()))?;
         }
     }
-    std::fs::write(path, bytes).map_err(|e| format!("Écriture de {path} impossible : {e}"))
+    std::fs::write(path, bytes).map_err(|e| format!("Cannot write {path}: {e}"))
 }
 
 /// Ouvre une URL de documentation dans le navigateur par défaut.
@@ -110,10 +110,10 @@ fn write_bytes(path: &str, bytes: &[u8]) -> Result<(), String> {
 #[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Seules les URL http(s) sont autorisées".into());
+        return Err("Only http(s) URLs are allowed".into());
     }
     if url.contains('"') || url.contains(' ') || url.contains('\n') {
-        return Err("URL invalide".into());
+        return Err("Invalid URL".into());
     }
     #[cfg(target_os = "windows")]
     let status = std::process::Command::new("cmd")
@@ -126,8 +126,8 @@ fn open_external(url: String) -> Result<(), String> {
 
     match status {
         Ok(s) if s.success() => Ok(()),
-        Ok(s) => Err(format!("Ouverture refusée ({s})")),
-        Err(e) => Err(format!("Impossible d'ouvrir le navigateur : {e}")),
+        Ok(s) => Err(format!("Opening refused ({s})")),
+        Err(e) => Err(format!("Cannot open the browser: {e}")),
     }
 }
 
@@ -187,30 +187,30 @@ fn item<R: Runtime, M: Manager<R>>(
             owned.push(id.to_string());
             return built;
         }
-        eprintln!("[bird] raccourci refusé par la plateforme : {id} — {a}");
+        eprintln!("[bird] shortcut refused by the platform: {id} - {a}");
     }
     MenuItemBuilder::with_id(id, label)
         .build(app)
-        .unwrap_or_else(|e| panic!("menu : {id} impossible à construire ({e})"))
+        .unwrap_or_else(|e| panic!("menu: cannot build {id} ({e})"))
 }
 
 fn build_menu<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
     let mut owned: Vec<String> = Vec::new();
     let sep = |a: &tauri::AppHandle<R>| PredefinedMenuItem::separator(a);
 
-    let file = Submenu::new(app, "Fichier", true)?;
+    let file = Submenu::new(app, "File", true)?;
 
     #[cfg(target_os = "macos")]
     {
         let app_menu = Submenu::new(app, "Bird", true)?;
         app_menu.append(&PredefinedMenuItem::about(
             app,
-            Some("À propos de Bird"),
+            Some("About Bird"),
             Some(AboutMetadata {
                 name: Some("Bird".into()),
                 version: Some(env!("CARGO_PKG_VERSION").into()),
                 comments: Some(
-                    "Éditeur vectoriel local-first — import PDF/AI/EPS, export PDF/X-1a".into(),
+                    "Local-first vector editor: PDF/AI/EPS import, PDF/X-1a export".into(),
                 ),
                 copyright: Some("© Zigmoon".into()),
                 ..Default::default()
@@ -223,76 +223,76 @@ fn build_menu<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
         app_menu.append(&PredefinedMenuItem::hide_others(app, None)?)?;
         app_menu.append(&PredefinedMenuItem::show_all(app, None)?)?;
         app_menu.append(&sep(app)?)?;
-        app_menu.append(&PredefinedMenuItem::quit(app, Some("Quitter Bird"))?)?;
+        app_menu.append(&PredefinedMenuItem::quit(app, Some("Quit Bird"))?)?;
         file.append(&app_menu)?;
     }
 
-    file.append(&item(app, "file.new", "Nouveau document", Some("CmdOrCtrl+N"), &mut owned))?;
-    file.append(&item(app, "file.open", "Ouvrir…", Some("CmdOrCtrl+O"), &mut owned))?;
-    file.append(&item(app, "file.save", "Enregistrer", Some("CmdOrCtrl+S"), &mut owned))?;
-    file.append(&item(app, "file.saveAs", "Enregistrer sous…", Some("CmdOrCtrl+Shift+S"), &mut owned))?;
-    file.append(&item(app, "file.import", "Importer un fichier…", Some("CmdOrCtrl+Shift+P"), &mut owned))?;
+    file.append(&item(app, "file.new", "New document", Some("CmdOrCtrl+N"), &mut owned))?;
+    file.append(&item(app, "file.open", "Open…", Some("CmdOrCtrl+O"), &mut owned))?;
+    file.append(&item(app, "file.save", "Save", Some("CmdOrCtrl+S"), &mut owned))?;
+    file.append(&item(app, "file.saveAs", "Save as…", Some("CmdOrCtrl+Shift+S"), &mut owned))?;
+    file.append(&item(app, "file.import", "Import a file…", Some("CmdOrCtrl+Shift+P"), &mut owned))?;
     file.append(&sep(app)?)?;
-    file.append(&item(app, "file.export", "Exporter…", Some("CmdOrCtrl+E"), &mut owned))?;
-    file.append(&item(app, "file.exportPdfX", "Exporter en PDF/X-1a…", None, &mut owned))?;
-    file.append(&item(app, "file.print", "Imprimer…", Some("CmdOrCtrl+P"), &mut owned))?;
+    file.append(&item(app, "file.export", "Export…", Some("CmdOrCtrl+E"), &mut owned))?;
+    file.append(&item(app, "file.exportPdfX", "Export as PDF/X-1a…", None, &mut owned))?;
+    file.append(&item(app, "file.print", "Print…", Some("CmdOrCtrl+P"), &mut owned))?;
     file.append(&sep(app)?)?;
-    file.append(&PredefinedMenuItem::close_window(app, Some("Fermer la fenêtre"))?)?;
+    file.append(&PredefinedMenuItem::close_window(app, Some("Close window"))?)?;
 
-    let edit = Submenu::new(app, "Édition", true)?;
-    edit.append(&item(app, "edit.undo", "Annuler", Some("CmdOrCtrl+Z"), &mut owned))?;
-    edit.append(&item(app, "edit.redo", "Rétablir", Some("CmdOrCtrl+Shift+Z"), &mut owned))?;
-    edit.append(&item(app, "edit.redoAlt", "Rétablir (Ctrl+Y)", Some("CmdOrCtrl+Y"), &mut owned))?;
+    let edit = Submenu::new(app, "Edit", true)?;
+    edit.append(&item(app, "edit.undo", "Undo", Some("CmdOrCtrl+Z"), &mut owned))?;
+    edit.append(&item(app, "edit.redo", "Redo", Some("CmdOrCtrl+Shift+Z"), &mut owned))?;
+    edit.append(&item(app, "edit.redoAlt", "Redo (Ctrl+Y)", Some("CmdOrCtrl+Y"), &mut owned))?;
     edit.append(&sep(app)?)?;
-    edit.append(&item(app, "edit.cut", "Couper", Some("CmdOrCtrl+X"), &mut owned))?;
-    edit.append(&item(app, "edit.copy", "Copier", Some("CmdOrCtrl+C"), &mut owned))?;
-    edit.append(&item(app, "edit.paste", "Coller", Some("CmdOrCtrl+V"), &mut owned))?;
-    edit.append(&item(app, "edit.pasteInPlace", "Coller sur place", Some("CmdOrCtrl+Shift+V"), &mut owned))?;
-    edit.append(&item(app, "edit.duplicate", "Dupliquer", Some("CmdOrCtrl+D"), &mut owned))?;
-    edit.append(&item(app, "edit.delete", "Supprimer", None, &mut owned))?;
+    edit.append(&item(app, "edit.cut", "Cut", Some("CmdOrCtrl+X"), &mut owned))?;
+    edit.append(&item(app, "edit.copy", "Copy", Some("CmdOrCtrl+C"), &mut owned))?;
+    edit.append(&item(app, "edit.paste", "Paste", Some("CmdOrCtrl+V"), &mut owned))?;
+    edit.append(&item(app, "edit.pasteInPlace", "Paste in place", Some("CmdOrCtrl+Shift+V"), &mut owned))?;
+    edit.append(&item(app, "edit.duplicate", "Duplicate", Some("CmdOrCtrl+D"), &mut owned))?;
+    edit.append(&item(app, "edit.delete", "Delete", None, &mut owned))?;
     edit.append(&sep(app)?)?;
-    edit.append(&item(app, "edit.selectAll", "Tout sélectionner", Some("CmdOrCtrl+A"), &mut owned))?;
-    edit.append(&item(app, "edit.deselect", "Désélectionner", Some("CmdOrCtrl+Shift+A"), &mut owned))?;
+    edit.append(&item(app, "edit.selectAll", "Select all", Some("CmdOrCtrl+A"), &mut owned))?;
+    edit.append(&item(app, "edit.deselect", "Deselect all", Some("CmdOrCtrl+Shift+A"), &mut owned))?;
 
-    let object = Submenu::new(app, "Objet", true)?;
-    object.append(&item(app, "object.group", "Grouper", Some("CmdOrCtrl+G"), &mut owned))?;
-    object.append(&item(app, "object.ungroup", "Dégrouper", Some("CmdOrCtrl+Shift+G"), &mut owned))?;
+    let object = Submenu::new(app, "Object", true)?;
+    object.append(&item(app, "object.group", "Group", Some("CmdOrCtrl+G"), &mut owned))?;
+    object.append(&item(app, "object.ungroup", "Ungroup", Some("CmdOrCtrl+Shift+G"), &mut owned))?;
     object.append(&sep(app)?)?;
-    object.append(&item(app, "object.front", "Premier plan", Some("CmdOrCtrl+Shift+]"), &mut owned))?;
-    object.append(&item(app, "object.forward", "Avancer d'un rang", Some("CmdOrCtrl+]"), &mut owned))?;
-    object.append(&item(app, "object.backward", "Reculer d'un rang", Some("CmdOrCtrl+["), &mut owned))?;
-    object.append(&item(app, "object.back", "Arrière-plan", Some("CmdOrCtrl+Shift+["), &mut owned))?;
+    object.append(&item(app, "object.front", "Bring to front", Some("CmdOrCtrl+Shift+]"), &mut owned))?;
+    object.append(&item(app, "object.forward", "Bring forward", Some("CmdOrCtrl+]"), &mut owned))?;
+    object.append(&item(app, "object.backward", "Send backward", Some("CmdOrCtrl+["), &mut owned))?;
+    object.append(&item(app, "object.back", "Send to back", Some("CmdOrCtrl+Shift+["), &mut owned))?;
     object.append(&sep(app)?)?;
-    object.append(&item(app, "object.lock", "Verrouiller", Some("CmdOrCtrl+2"), &mut owned))?;
-    object.append(&item(app, "object.unlockAll", "Tout déverrouiller", Some("CmdOrCtrl+Alt+2"), &mut owned))?;
-    object.append(&item(app, "object.hide", "Masquer", Some("CmdOrCtrl+3"), &mut owned))?;
-    object.append(&item(app, "object.showAll", "Tout afficher", Some("CmdOrCtrl+Alt+3"), &mut owned))?;
+    object.append(&item(app, "object.lock", "Lock", Some("CmdOrCtrl+2"), &mut owned))?;
+    object.append(&item(app, "object.unlockAll", "Unlock all", Some("CmdOrCtrl+Alt+2"), &mut owned))?;
+    object.append(&item(app, "object.hide", "Hide", Some("CmdOrCtrl+3"), &mut owned))?;
+    object.append(&item(app, "object.showAll", "Show all", Some("CmdOrCtrl+Alt+3"), &mut owned))?;
     object.append(&sep(app)?)?;
-    object.append(&item(app, "object.outlineStroke", "Contour de trait", Some("CmdOrCtrl+Shift+O"), &mut owned))?;
-    object.append(&item(app, "object.textToCurves", "Texte en courbes", None, &mut owned))?;
-    object.append(&item(app, "object.simplify", "Simplifier le tracé", None, &mut owned))?;
+    object.append(&item(app, "object.outlineStroke", "Outline stroke", Some("CmdOrCtrl+Shift+O"), &mut owned))?;
+    object.append(&item(app, "object.textToCurves", "Text to outlines", None, &mut owned))?;
+    object.append(&item(app, "object.simplify", "Simplify path", None, &mut owned))?;
 
-    let view = Submenu::new(app, "Affichage", true)?;
-    view.append(&item(app, "view.zoomIn", "Zoom avant", Some("CmdOrCtrl+="), &mut owned))?;
-    view.append(&item(app, "view.zoomOut", "Zoom arrière", Some("CmdOrCtrl+-"), &mut owned))?;
-    view.append(&item(app, "view.fit", "Ajuster à l'écran", Some("CmdOrCtrl+0"), &mut owned))?;
-    view.append(&item(app, "view.actual", "Taille réelle (100 %)", Some("CmdOrCtrl+1"), &mut owned))?;
-    view.append(&item(app, "view.selection", "Zoom sur la sélection", Some("CmdOrCtrl+Alt+0"), &mut owned))?;
+    let view = Submenu::new(app, "View", true)?;
+    view.append(&item(app, "view.zoomIn", "Zoom in", Some("CmdOrCtrl+="), &mut owned))?;
+    view.append(&item(app, "view.zoomOut", "Zoom out", Some("CmdOrCtrl+-"), &mut owned))?;
+    view.append(&item(app, "view.fit", "Fit to screen", Some("CmdOrCtrl+0"), &mut owned))?;
+    view.append(&item(app, "view.actual", "Actual size (100 %)", Some("CmdOrCtrl+1"), &mut owned))?;
+    view.append(&item(app, "view.selection", "Zoom to selection", Some("CmdOrCtrl+Alt+0"), &mut owned))?;
     view.append(&sep(app)?)?;
-    view.append(&item(app, "view.rulers", "Règles", Some("CmdOrCtrl+R"), &mut owned))?;
-    view.append(&item(app, "view.grid", "Grille", Some("CmdOrCtrl+'"), &mut owned))?;
-    view.append(&item(app, "view.snap", "Magnétisme", Some("CmdOrCtrl+;"), &mut owned))?;
+    view.append(&item(app, "view.rulers", "Rulers", Some("CmdOrCtrl+R"), &mut owned))?;
+    view.append(&item(app, "view.grid", "Grid", Some("CmdOrCtrl+'"), &mut owned))?;
+    view.append(&item(app, "view.snap", "Snapping", Some("CmdOrCtrl+;"), &mut owned))?;
     view.append(&sep(app)?)?;
-    view.append(&item(app, "view.fullscreen", "Plein écran", Some("F11"), &mut owned))?;
-    view.append(&item(app, "view.panel", "Panneau de droite", Some("CmdOrCtrl+Alt+P"), &mut owned))?;
+    view.append(&item(app, "view.fullscreen", "Full screen", Some("F11"), &mut owned))?;
+    view.append(&item(app, "view.panel", "Right panel", Some("CmdOrCtrl+Alt+P"), &mut owned))?;
 
-    let window = Submenu::new(app, "Fenêtre", true)?;
+    let window = Submenu::new(app, "Window", true)?;
     window.append(&PredefinedMenuItem::minimize(app, None)?)?;
     #[cfg(target_os = "macos")]
     window.append(&PredefinedMenuItem::maximize(app, None)?)?;
 
-    let help = Submenu::new(app, "Aide", true)?;
-    help.append(&item(app, "help.shortcuts", "Raccourcis clavier", Some("F1"), &mut owned))?;
+    let help = Submenu::new(app, "Help", true)?;
+    help.append(&item(app, "help.shortcuts", "Keyboard shortcuts", Some("F1"), &mut owned))?;
     help.append(&item(app, "help.plugins", "Plug-ins…", Some("CmdOrCtrl+K"), &mut owned))?;
     help.append(&sep(app)?)?;
     help.append(&item(app, "help.docs", "Documentation", None, &mut owned))?;

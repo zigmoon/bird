@@ -8,8 +8,8 @@ interface Props {
 }
 
 const {
-  title = 'Bird — éditeur vectoriel gratuit, import PDF/AI et export SVG/PDF',
-  description = 'Éditeur vectoriel local-first : Bézier, calques, règles, Pathfinder, import SVG/PDF/AI/EPS et export SVG ou PDF vectoriel. Sans compte.',
+  title = 'Bird — free vector editor, PDF/AI import and SVG/PDF export',
+  description = 'Local-first vector editor: Bézier, layers, rulers, Pathfinder, SVG/PDF/AI/EPS import and SVG or vector PDF export. No account.',
   noindex = false
 } = Astro.props;
 
@@ -27,7 +27,7 @@ const jsonLd = {
 };
 ---
 <!doctype html>
-<html lang="fr" translate="no">
+<html lang="en" translate="no">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -58,13 +58,13 @@ const jsonLd = {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/></svg>
         <span>BIRD</span>
       </a>
-      <nav class="site-nav" aria-label="Navigation principale">
-        <a href="/editor">Éditeur</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/editor">Editor</a>
         <a href="/docs">Documentation</a>
         <a href="/docs#astro">Astro</a>
         <a href="/docs#rust">Rust</a>
       </nav>
-      <a class="cta cta--small" href="/editor">Ouvrir l’éditeur</a>
+      <a class="cta cta--small" href="/editor">Open the editor</a>
     </header>
 
     <main class="site-main">
@@ -73,11 +73,11 @@ const jsonLd = {
 
     <footer class="site-footer">
       <div>
-        <strong>BIRD</strong> — éditeur vectoriel local-first.
-        <span class="muted">Vos documents restent dans votre navigateur.</span>
+        <strong>BIRD</strong> — local-first vector editor.
+        <span class="muted">Your documents stay in your browser.</span>
       </div>
       <div class="footer-links">
-        <a href="/editor">Éditeur</a>
+        <a href="/editor">Editor</a>
         <a href="/docs">Documentation</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="/sitemap.xml">Sitemap</a>

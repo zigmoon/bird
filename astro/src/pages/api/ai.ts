@@ -36,7 +36,7 @@ function json(body: unknown, status = 200) {
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for') || 'local';
-  if (rateLimited(ip)) return json({ error: 'Trop de requêtes, réessayez dans une minute.' }, 429);
+  if (rateLimited(ip)) return json({ error: 'Too many requests, try again in a minute.' }, 429);
 
   const runtimeEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } })
     .process?.env?.OPENROUTER_API_KEY;
@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     '';
   if (!key) {
     return json({
-      error: 'Clé OpenRouter absente. Renseignez-la dans l’atelier IA ou configurez OPENROUTER_API_KEY.'
+      error: 'Missing OpenRouter key. Enter it in the AI workshop or set OPENROUTER_API_KEY.'
     }, 401);
   }
 
@@ -73,7 +73,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://app.zigmoon.com/bird/',
-        'X-Title': 'Bird — éditeur vectoriel'
+        'X-Title': 'Bird — vector editor'
       },
       body: JSON.stringify(body)
     });

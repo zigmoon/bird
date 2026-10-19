@@ -336,12 +336,30 @@ own colour palette (the swatches used to paint artwork) is the only exception.
 before every release. Read-only escapes are declared inline with
 `check-ui:allow <reason>`.
 
+### Interface language
+
+**English is the default.** French is available in *Preferences → Interface
+language*; the choice is stored in `localStorage` under `bird.lang` and applied
+immediately, without a reload.
+
+French is the *source* language of the markup and the scripts; `js/i18n.js`
+translates the live DOM — text nodes and the four attributes a user can read
+(`title`, `aria-label`, `placeholder`, `alt`) — from a table keyed by the French
+text, plus pattern rules for messages built by concatenation. The original value
+is stored on the node itself, so switching language is lossless and idempotent.
+A `MutationObserver` covers everything the scripts create later (toasts, layer
+rows, the generated shortcut sheet).
+
+To add a string: write it in French, then add the pair to `EN` in
+`js/i18n.js`. If the message interpolates values, add a pattern instead.
+
 ```
 bird/
 ├── index.html                  UI (stable DOM, reused by Astro and Tauri)
 ├── css/style.css               IBM Plex Mono, black & white, 4 px grid
 ├── icons/                      logo variants, favicon, PWA icons
 ├── js/
+│   ├── i18n.js                 interface language: English default, French option
 │   ├── fabric.min.js           canvas engine (Fabric.js 5.1)
 │   ├── paper-full.min.js       boolean ops, path maths (Paper.js)
 │   ├── opentype.min.js         font parsing → glyph outlines

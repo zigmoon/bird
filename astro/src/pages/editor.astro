@@ -3,17 +3,17 @@ import EditorLayout from '../layouts/EditorLayout.astro';
 import shell from '../generated/editor-shell.html?raw';
 import engineScripts from '../generated/editor-scripts.html?raw';
 
-const title = 'Bird — Studio vectoriel | Import PDF/AI, export SVG/PDF';
-const description = 'Éditeur vectoriel local-first : Bézier, calques, règles, Pathfinder, plug-ins, panneaux détachables, import SVG/PDF/AI/EPS et export SVG ou PDF vectoriel. Sans compte.';
+const title = 'Bird — Vector studio | PDF/AI import, SVG/PDF export';
+const description = 'Local-first vector editor: Bézier, layers, rulers, Pathfinder, plug-ins, detachable panels, SVG/PDF/AI/EPS import and SVG or vector PDF export. No account.';
 ---
 <EditorLayout title={title} description={description}>
   <Fragment set:html={shell} />
 
   <script is:inline>
-    // Le moteur est servi depuis public/assets/bird : on lui indique où trouver
-    // les bibliothèques PDF/EPS chargées à la demande.
+    // The engine is served from public/assets/bird: tell it where to find the
+    // PDF/EPS libraries that are loaded on demand.
     window.BIRD_ASSET_BASE = '/assets/bird/js/';
   </script>
-  <!-- Ordre de chargement du moteur, repris de index.html par sync-engine.mjs -->
+  <!-- Engine load order, copied from index.html by sync-engine.mjs -->
   <Fragment set:html={engineScripts} />
 </EditorLayout>

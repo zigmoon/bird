@@ -1,54 +1,54 @@
 # BIRD
 
-BIRD est un éditeur vectoriel local-first qui fonctionne entièrement dans le navigateur.
-Il permet de créer des illustrations, logos et mises en page, puis de les importer/exporter
-dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
+BIRD is a local-first vector editor that runs entirely in the browser. It lets you
+create illustrations, logos and layouts, then import and export them in the standard
+vector formats (SVG, PDF, AI, EPS).
 
-## Fonctionnalités
+## Features
 
-- Outil Plume (courbes de Bézier) avec édition des ancres et poignées
-- Crayon et pinceaux vectoriels (Ligne, Encre, Marker, Spray, Néon)
-- Formes paramétrables : rectangle (rayon), ellipse, ligne, étoile, polygone
-- Texte éditable (police, taille, gras, italique, alignement)
-- Pathfinder vectoriel (union, soustraction, intersection, exclusion)
-- Panneau Calques : sélection, renommage, visibilité, verrouillage, ordre
-- Règles, repères, grille et magnétisme
-- Remplissage, contour, pointillés, opacité, modes de fusion
-- Alignement, répartition, miroir, zoom sur sélection
-- Pipette et presse-papiers SVG/image
-- Plug-ins : registre extensible, API stable, panneau de réglages généré, motif vectoriel inclus
-- Widgets détachables : ce sont les sections du panneau de droite elles-mêmes qui flottent, se replient et se rattachent
-- Création assistée par IA (OpenRouter, DeepSeek) et SVG natif Recraft
-- Import SVG, SVGZ, PDF, Adobe Illustrator (.ai), EPS, images et vidéos
-- Import PDF multi-pages : première page, page choisie, ou un plan de travail par page
-- Plans de travail multiples : panneau, sélecteur flottant, format indépendant, historique par plan
-- Export SVG, PDF vectoriel, PDF multi-plans, PNG, JPG, WEBP (document ou sélection)
-- Export PDF/X-1a pour l'imprimeur : CMJN, dégradés en shadings, texte vectorisé, profil ICC
-- Outils Illustrator : contour de trait, décalage de tracé, simplification, symboles, blend
-- Texte → courbes (opentype.js), polices chargeables (.ttf/.otf)
-- Projet .plume (JSON) versionné, sauvegarde automatique localStorage/IndexedDB
-- Historique incrémental annuler / rétablir : états partagés par objet, budget de 80 états ou 64 Mo
+- Pen tool (Bezier curves) with anchor and handle editing
+- Pencil and vector brushes (Line, Ink, Marker, Spray, Neon)
+- Parametric shapes: rectangle (corner radius), ellipse, line, star, polygon
+- Editable text (font, size, bold, italic, alignment)
+- Vector Pathfinder (union, subtract, intersect, exclude)
+- Layers panel: select, rename, visibility, locking, order
+- Rulers, guides, grid and snapping
+- Fill, stroke, dashes, opacity, blend modes
+- Align, distribute, flip, zoom to selection
+- Eyedropper and SVG/image clipboard
+- Plug-ins: extensible registry, stable API, generated settings panel, vector pattern included
+- Detachable widgets: the right-panel sections themselves float, collapse and re-dock
+- AI-assisted creation (OpenRouter, DeepSeek) and native Recraft SVG
+- Import SVG, SVGZ, PDF, Adobe Illustrator (.ai), EPS, images and video
+- Multi-page PDF import: first page, a chosen page, or one artboard per page
+- Multiple artboards: panel, floating switcher, independent format, history per artboard
+- Export SVG, vector PDF, multi-artboard PDF, PNG, JPG, WEBP (document or selection)
+- PDF/X-1a export for printers: CMYK, gradients as real shadings, text as outlines, ICC profile
+- Illustrator tools: outline stroke, offset path, simplify, symbols, blend
+- Text to outlines (opentype.js), loadable fonts (.ttf/.otf)
+- Versioned .plume project (JSON), autosave to localStorage/IndexedDB
+- Incremental undo/redo: states shared per object, budget of 80 states or 64 MB
 
 ## Formats
 
-- Import : .svg .svgz .pdf .ai .eps .plume .bird .json .png .jpg .webp .gif .bmp .avif .webm .mp4
-- Export : .svg .pdf .png .jpg .webp .plume
-- Un fichier .ai moderne (PDF compatible) est importé en vectoriel via pdf.js.
-- Un .ai/.eps PostScript est interprété par le moteur Adobe Illustrator niveau 2.
+- Import: .svg .svgz .pdf .ai .eps .plume .bird .json .png .jpg .webp .gif .bmp .avif .webm .mp4
+- Export: .svg .pdf .png .jpg .webp .plume
+- A modern .ai file (PDF-compatible) is imported as vectors through pdf.js.
+- A PostScript .ai/.eps is interpreted by the Adobe Illustrator level 2 engine.
 
-## Raccourcis
+## Shortcuts
 
-- V : sélection, P : plume, N : crayon, B : pinceau, I : pipette
-- R : rectangle, E : ellipse, L : ligne, T : texte, H : main
-- Espace : main temporaire
-- Ctrl+Z / Ctrl+Shift+Z : annuler / rétablir
-- Ctrl+D : dupliquer, Ctrl+G / Ctrl+Shift+G : grouper / dégrouper
-- Ctrl+2 / Ctrl+3 : verrouiller / masquer
-- Ctrl+0 : ajuster à l'écran, Maj+1 / Maj+2 : ajuster / zoom sélection
-- Ctrl+R : règles, Ctrl+' : grille, Ctrl+; : magnétisme
-- Ctrl+K : plug-ins
-- Ctrl+Page↑ / Ctrl+Page↓ : plan de travail précédent / suivant
-- Suppr : supprimer, Échap / Entrée : terminer un tracé
+- V: select, P: pen, N: pencil, B: brush, I: eyedropper
+- R: rectangle, E: ellipse, L: line, T: text, H: hand
+- Space: temporary hand
+- Ctrl+Z / Ctrl+Shift+Z: undo / redo
+- Ctrl+D: duplicate, Ctrl+G / Ctrl+Shift+G: group / ungroup
+- Ctrl+2 / Ctrl+3: lock / hide
+- Ctrl+0: fit to screen, Shift+1 / Shift+2: fit / zoom to selection
+- Ctrl+R: rulers, Ctrl+' : grid, Ctrl+; : snapping
+- Ctrl+K: plug-ins
+- Ctrl+PageUp / Ctrl+PageDown: previous / next artboard
+- Del: delete, Esc / Enter: finish a path
 
 ## API
 
@@ -56,40 +56,46 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Bird.io.importSVG(text), Bird.io.importPDF(arrayBuffer), Bird.io.importEPS(arrayBuffer)
 - Bird.export({ format, scope, background, scale, returnBlob })
 - Bird.exportSVG({ background })
-- Bird.io.pdfPageCount(buffer) : nombre de pages et formats d'un PDF
-- Bird.export({ format:'pdf', scope:'pages' }) : un PDF, une page par plan de travail
-- Bird.pages.list() / count() / go(n) / add(name) / duplicate() / remove(n) / rename(n, nom) / move(n, delta)
-- Bird.export({ format:'pdfx', scope:'document', returnBlob:true }) : PDF/X-1a CMJN + ICC
+- Bird.io.pdfPageCount(buffer): page count and formats of a PDF
+- Bird.export({ format:'pdf', scope:'pages' }): one PDF, one page per artboard
+- Bird.pages.list() / count() / go(n) / add(name) / duplicate() / remove(n) / rename(n, name) / move(n, delta)
+- Bird.export({ format:'pdfx', scope:'document', returnBlob:true }): PDF/X-1a CMYK + ICC
 - BirdVector.outlineStroke(obj) / offsetPathItem(item, d) / simplifyPath(obj, tol)
 - BirdVector.vectorizeTextObject(canvas, obj) / loadFontFile(file)
 - BirdVector.blendObjects(a, b, n) / createSymbol(obj, name) / instantiateSymbol(def, x, y)
 - BirdPDFX.build({ width, height, bleed, background, items, images, icc, cmyk })
 - Bird.view.rulers(bool), Bird.view.grid(bool), Bird.view.snap(bool)
 - Bird.widgets.detach(name) / dock(name) / dockAll() / reset()
-- Bird.document.undo() / redo() / history() / edit(fn, label) : historique incrémental
-- Bird.commands.run(id) / list() / groups() : registre partagé clavier + menu natif
+- Bird.document.undo() / redo() / history() / edit(fn, label): incremental history
+- Bird.commands.run(id) / list() / groups(): registry shared by keyboard and native menu
 - BirdPlugins.register(manifest), BirdPlugins.list(), BirdPlugins.toggle(id)
+- BirdI18n.get() / set('en' or 'fr') / t(text): interface language, English by default
 
-## Raccourcis (Illustrator / Figma)
+## Shortcuts (Illustrator / Figma)
 
-Ctrl devient ⌘ sur macOS. F1 affiche la liste générée depuis le registre.
-Fichier : Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Maj+S / Ctrl+Maj+P / Ctrl+E / Ctrl+P
-Édition : Ctrl+Z / Ctrl+Maj+Z / Ctrl+Y / Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Maj+V / Ctrl+D / Ctrl+A / Ctrl+Maj+A
-Objet : Ctrl+G / Ctrl+Maj+G / Ctrl+] / Ctrl+[ / Ctrl+Maj+] / Ctrl+Maj+[ / Ctrl+2 / Ctrl+Alt+2 / Ctrl+3 / Ctrl+Alt+3 / Ctrl+Maj+O
-Affichage : Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- / Ctrl+Alt+0 / Ctrl+R / Ctrl+' / Ctrl+; / F11
+Ctrl becomes Cmd on macOS. F1 shows the list generated from the registry.
+File: Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S / Ctrl+Shift+P / Ctrl+E / Ctrl+P
+Edit: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y / Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Shift+V / Ctrl+D / Ctrl+A / Ctrl+Shift+A
+Object: Ctrl+G / Ctrl+Shift+G / Ctrl+] / Ctrl+[ / Ctrl+Shift+] / Ctrl+Shift+[ / Ctrl+2 / Ctrl+Alt+2 / Ctrl+3 / Ctrl+Alt+3 / Ctrl+Shift+O
+View: Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- / Ctrl+Alt+0 / Ctrl+R / Ctrl+' / Ctrl+; / F11
 
 ## Plug-ins
 
-Un plug-in est un fichier .plugin.js qui appelle BirdPlugins.register() avec un manifeste
-(id, name, version, ui.fields, run, preview). Il reçoit une API : fabric, canvas, document,
+A plug-in is a .plugin.js file that calls BirdPlugins.register() with a manifest
+(id, name, version, ui.fields, run, preview). It receives an API: fabric, canvas, document,
 selection(), add(), replaceSelection(), begin()/commit(), toast(), settings, svgToGroup().
-Plug-in livré : « Motif vectoriel » — rayures, damier, pois, vagues, chevrons, triangles,
-croix, grille, écailles. Sortie texture (un fabric.Pattern) ou vectorielle (formes réelles).
+Bundled plug-in: "Vector pattern" - stripes, checker, dots, waves, chevrons, triangles,
+crosses, grid, scales. Output as a texture (a fabric.Pattern) or as real vector shapes.
 
-## Versions
+## Interface language
 
-- / : version web autonome (aucune compilation)
-- /astro/ : version Astro (SEO, PWA, routes API) — scripts générés depuis index.html
-- /rust/ : moteur Rust (CLI, serveur local, conversion de projets)
-- /desktop/ : coquille Tauri 2 → applis macOS, Windows et Linux compilées par la CI
-  (menu système portant les raccourcis Adobe/Figma, fichiers natifs, .dmg/.msi/.deb/.AppImage)
+The interface is English by default. French is available in Preferences (language
+selector). The choice is stored in localStorage under `bird.lang`.
+
+## Builds
+
+- / : standalone web build (no compilation)
+- /astro/ : Astro build (SEO, PWA, API routes) - scripts generated from index.html
+- /rust/ : Rust engine (CLI, local server, project conversion)
+- /desktop/ : Tauri 2 shell -> macOS, Windows and Linux apps built by CI
+  (system menu carrying the Adobe/Figma shortcuts, native files, .dmg/.msi/.deb/.AppImage)

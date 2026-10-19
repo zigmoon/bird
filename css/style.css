@@ -150,7 +150,7 @@ button { cursor: pointer; }
   font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: #1a1a1a;
 }
-.startup-logo img { width: 28px; height: 28px; border-radius: 6px; }
+.startup-logo img { width: 44px; height: 44px; border-radius: 9px; }
 .startup-title {
   margin: 0; font-size: 17px; font-weight: 700;
   letter-spacing: 0.04em; line-height: 1.25; color: #1a1a1a;
@@ -249,14 +249,12 @@ button { cursor: pointer; }
   cursor: pointer; flex: 0 0 auto;
 }
 .brand:hover { background: #f6f6f6; border-color: #ededed; }
+/* Le logo seul identifie l'application : pas de mot « BIRD » à côté, il
+   doublonnait le logotype sur 30 px de haut. */
 .brand .logo {
   width: 30px; height: 23px;
   object-fit: contain; display: block;
   flex: 0 0 auto;
-}
-.brand-name {
-  font-weight: 700; font-size: 13px;
-  letter-spacing: 1.5px; color: #1a1a1a;
 }
 .doc-dirty { color: #1a1a1a; font-size: 10px; }
 
@@ -493,7 +491,7 @@ button { cursor: pointer; }
 }
 .empty-hint .empty-logo {
   display: block;
-  width: clamp(180px, 26vw, 300px);
+  width: clamp(132px, 18vw, 210px);
   height: auto;
   margin: 0 auto 18px;
   opacity: 1;             /* le gris clair est déjà dans le fichier SVG */
@@ -785,6 +783,14 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 0; border-bottom: 1px solid #f0f0f0;
 }
+.settings-select {
+  margin-left: auto; height: 28px; padding: 0 8px;
+  background: #fff; color: #1a1a1a;
+  border: 1px solid #e0e0e0; border-radius: 3px;
+  font: inherit; font-size: 10px; letter-spacing: .04em;
+  cursor: pointer;
+}
+.settings-select:hover { border-color: #c9c9c9; }
 .settings-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; }
 .settings-desc { font-size: 9.5px; color: #1a1a1a; opacity: 0.5; margin-top: 3px; }
 .settings-pill {

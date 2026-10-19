@@ -365,10 +365,29 @@ dans `css/style.css`, `js/app.js` ou `index.html` (écart max-min des canaux > 8
 et la CI l’exécute avant chaque publication. Les exceptions légitimes se
 déclarent en ligne avec `check-ui:allow <raison>`.
 
+### Langue de l’interface
+
+**L’anglais est la langue par défaut.** Le français est disponible dans
+*Préférences → Langue de l’interface* ; le choix est conservé dans
+`localStorage` sous `bird.lang` et s’applique immédiatement, sans rechargement.
+
+Le français est la langue *source* du balisage et des scripts ; `js/i18n.js`
+traduit le DOM vivant — nœuds de texte et les quatre attributs qu’un utilisateur
+peut lire (`title`, `aria-label`, `placeholder`, `alt`) — à partir d’une table
+indexée par le texte français, plus des règles de motif pour les messages
+construits par concaténation. La valeur d’origine est stockée sur le nœud
+lui-même : le changement de langue est donc réversible et idempotent. Un
+`MutationObserver` couvre tout ce que les scripts créent ensuite (toasts, lignes
+de calques, feuille de raccourcis générée).
+
+Pour ajouter une chaîne : l’écrire en français, puis ajouter la paire dans `EN`
+de `js/i18n.js`. Si le message interpole des valeurs, ajouter un motif.
+
 ```
 bird/
 ├── index.html                 interface (DOM stable, réutilisé par Astro)
 ├── css/style.css              design : IBM Plex Mono, noir & blanc, grille 4 px
+├── js/i18n.js                 langue : anglais par défaut, français en option
 ├── icons/
 │   ├── bird-logo.svg          logo complet (5 oiseaux) — splash
 │   ├── bird-logo-gray.svg     logo complet en gris clair — aperçu du plan vide

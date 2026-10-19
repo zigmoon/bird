@@ -52,7 +52,9 @@ function main() {
   const scriptRe = /<script\b[^>]*\bsrc\s*=\s*"([^"]+)"[^>]*>\s*<\/script>/gi;
   let match;
   while ((match = scriptRe.exec(bodyMatch[1])) !== null) {
-    const src = match[1].split('?')[0].replace(/^js\//, '/assets/bird/js/');
+    // On conserve la clé de version : sans elle, le service worker (cache-first
+  // sur /assets/**) sert indéfiniment l'ancien fichier au visiteur.
+  const src = match[1].replace(/^js\//, '/assets/bird/js/');
     scripts.push('<script src="' + src + '"></script>');
   }
   if (!scripts.length) throw new Error('index.html : aucun <script src> trouvé');
