@@ -105,7 +105,7 @@ Chaque section possède un bouton **détacher**. Une fois détachée :
 - sa position est **mémorisée** (`localStorage`, clé `bird_widgets_v2`) ;
 - elle **continue de fonctionner à l’identique** : c’est le même nœud DOM qui est déplacé, pas une copie. Aucun écouteur n’est perdu.
 
-Aucune liste de widgets séparée : **ce sont les sections existantes** du panneau qui se détachent. L’icône de la section dans le rail porte un point bleu tant que son widget flotte, et un clic la ramène au premier plan. `•••` de l’en-tête replie le panneau, le bouton ↧ rattache tout d’un coup.
+Aucune liste de widgets séparée : **ce sont les sections existantes** du panneau qui se détachent. L’icône de la section dans le rail porte un point noir tant que son widget flotte, et un clic la ramène au premier plan. `•••` de l’en-tête replie le panneau, le bouton ↧ rattache tout d’un coup.
 
 ```js
 Bird.widgets.detach('layers');   // détache le panneau Calques
@@ -351,6 +351,19 @@ découvrir est un raccourci que personne n’utilise.
 ---
 
 ## Architecture
+
+### Direction artistique — une règle, contrôlée
+
+Noir, blanc, gris. **Aucune teinte dans l’interface** — pas même pour un état
+actif, une erreur ou une action destructive. Un état s’exprime par une nuance de
+remplissage, un bord plus sombre, une ombre interne ou une inversion
+noir↔blanc. Le nuancier de l’utilisateur (les couleurs avec lesquelles il peint)
+est la seule exception.
+
+`node scripts/check-ui.mjs` fait échouer le build sur toute couleur chromatique
+dans `css/style.css`, `js/app.js` ou `index.html` (écart max-min des canaux > 8),
+et la CI l’exécute avant chaque publication. Les exceptions légitimes se
+déclarent en ligne avec `check-ui:allow <raison>`.
 
 ```
 bird/

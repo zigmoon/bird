@@ -324,6 +324,18 @@ shortcut nobody uses.
 
 ## Architecture
 
+### Design language — one rule, enforced
+
+Black, white, grey. **No hue anywhere in the interface** — not even for an
+active state, an error or a destructive action. A state is expressed by a fill
+shade, a darker border, an inset shadow or a black↔white inversion. The user's
+own colour palette (the swatches used to paint artwork) is the only exception.
+
+`node scripts/check-ui.mjs` fails the build on any chromatic colour in
+`css/style.css`, `js/app.js` or `index.html` (channel spread > 8), and CI runs it
+before every release. Read-only escapes are declared inline with
+`check-ui:allow <reason>`.
+
 ```
 bird/
 ├── index.html                  UI (stable DOM, reused by Astro and Tauri)
