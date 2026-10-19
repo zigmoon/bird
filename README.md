@@ -336,6 +336,31 @@ own colour palette (the swatches used to paint artwork) is the only exception.
 before every release. Read-only escapes are declared inline with
 `check-ui:allow <reason>`.
 
+### Panels never touch the artboard
+
+A document opens with **no display tool active**: no rulers, no snapping, no
+grid. `scripts/check-ui.mjs` fails the build if the state default or the
+top-bar button says otherwise.
+
+Opening or closing the right-hand drawer must never move what you are drawing.
+Two things made that untrue, and both are now structural:
+
+* **`fitView()` on every collapse.** The drawer used to refit the view, which
+  re-centred and re-zoomed the whole document. Collapsing a panel is a change of
+  *surface*, not of *view*: the canvas keeps its origin and its
+  `viewportTransform`, so objects stay at the same screen coordinate. To resize
+  without moving anything, call `Bird.view.resize()` — it exists for hosts too.
+* **A void at the drawer's edge.** The rulers and the canvas carry **pixel**
+  sizes (an inline width and Fabric's bitmap), which do not follow CSS. Opening
+  the drawer left a ruler 894 px wide over a 718 px stage; closing it left an
+  18 px gap where the drawer had been. A `ResizeObserver` on the stage plus a
+  `resize` listener now drive a single `syncStageSurface()`, and every path that
+  opens the panel goes through `openRightPanel()`, which resizes as it opens.
+
+The panel's width is deliberately **not animated**: animating it means one
+canvas resize per frame, and between two frames the ruler is shorter than the
+stage — a visible gap. It snaps, so the measurement is exact immediately.
+
 ### Day / night theme
 
 The moon/sun button left of *Preferences* switches theme; the choice is stored

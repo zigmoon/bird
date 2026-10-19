@@ -329,12 +329,49 @@ function checkVersionConsistency() {
   }
 }
 
+/* ── 7. Aucun outil d'affichage actif au premier lancement ────
+   Un document neuf doit montrer le plan de travail nu : ni règles, ni
+   magnétisme, ni grille. Deux endroits décident de l'état initial, et il
+   faut qu'ils soient d'accord — sinon le bouton de la barre haute affirme
+   « actif » tandis que la scène est nue, ou l'inverse. */
+function checkDefaultToolsOff() {
+  const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+  const defaults = {};
+  for (const key of ['showRulers', 'snapEnabled', 'showGrid']) {
+    const m = app.match(new RegExp('^\\s*' + key + ':\\s*(true|false)', 'm'));
+    if (!m) { errors.push(`js/app.js — valeur par défaut de ${key} introuvable`); continue; }
+    defaults[key] = m[1] === 'true';
+    if (m[1] === 'true') {
+      errors.push(
+        `js/app.js — ${key} vaut true par défaut.\n` +
+        '    Un document neuf doit s’ouvrir sans outil d’affichage actif (règles, magnétisme, grille).'
+      );
+    }
+  }
+
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  for (const [id, key] of [['btnRulers', 'showRulers'], ['btnSnap', 'snapEnabled'], ['btnGrid', 'showGrid']]) {
+    const m = html.match(new RegExp('<button[^>]*id="' + id + '"[^>]*>'));
+    if (!m) continue;
+    const tag = m[0];
+    const on = /class="[^"]*\bis-on\b/.test(tag);
+    const pressed = /aria-pressed="true"/.test(tag);
+    if (on || pressed) {
+      errors.push(
+        `index.html — #${id} est marqué actif (${on ? 'classe is-on' : ''}${on && pressed ? ' + ' : ''}${pressed ? 'aria-pressed=true' : ''})\n` +
+        `    alors que l’état initial de ${key} doit être false : le bouton mentirait au chargement.`
+      );
+    }
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
 checkMonochrome();
 checkTranslationSource();
 checkVersionConsistency();
+checkDefaultToolsOff();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -342,5 +379,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut');
 for (const n of notes) console.log('  · ' + n);

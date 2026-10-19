@@ -623,7 +623,11 @@ kbd {
   flex-direction: column;
   flex: 0 0 auto;
   overflow: hidden;
-  transition: width 0.25s ease;
+  /* Pas de transition de largeur : les règles et le canvas portent des tailles
+     en pixels et doivent suivre la scène. Animer la largeur, c'est demander un
+     redimensionnement de canvas par frame, et laisser — entre deux frames — une
+     règle plus courte que la scène, donc un VIDE à l'endroit de la trappe.
+     La trappe s'ouvre et se ferme d'un coup : la mesure est exacte tout de suite. */
   user-select: none;
 }
 .props.collapsed {

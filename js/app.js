@@ -104,8 +104,10 @@ const state = {
   // grille, repères, magnétisme
   gridSize: 20,
   showGrid: false,
-  showRulers: true,
-  snapEnabled: true,
+  // Aucun outil d'affichage actif au premier lancement : ni les règles, ni le
+  // magnétisme. Un document neuf doit montrer le plan de travail nu.
+  showRulers: false,
+  snapEnabled: false,
   guides: [],                 // [{ axis:'x'|'y', pos:<unités document> }]
 
   // plans de travail (pages)
@@ -464,6 +466,23 @@ function resetDocument() {
 /* ════════════════════════════════════════════════════════════
    SIDEBARS RÉTRACTABLES (style SuperPrint)
 ════════════════════════════════════════════════════════════ */
+
+/* Ouvrir la trappe de droite est UNE opération, pas deux.
+   Le panneau change de largeur et la scène change de taille : les règles et le
+   canvas portent des tailles en PIXELS, ils ne suivent pas le CSS. Un appel qui
+   n'ouvre que le panneau laisse donc une règle plus large que la scène (elle
+   déborde sous le panneau) ou plus courte (un VIDE à l'endroit de la trappe).
+   Quatre endroits ouvraient le panneau à la main ; ils passent tous par ici.
+
+   Aucun recadrage : `fitView()` recentrerait et re-zoomerait, donc déplacerait
+   le dessin sous les yeux de l'utilisateur. */
+function openRightPanel() {
+  if (!els.rightSidebar) return;
+  els.rightSidebar.classList.remove('collapsed');
+  syncStageSurface();
+  if (window.BirdWidgets) BirdWidgets.publish();
+}
+
 function bindSidebars() {
   const left = els.leftSidebar;
   const right = els.rightSidebar;
@@ -479,11 +498,12 @@ function bindSidebars() {
     const el = side === 'left' ? left : right;
     el.classList.toggle('collapsed', collapsed);
     syncIcons();
-    // recentre et réajuste la vue après le changement de taille
-    requestAnimationFrame(() => {
-      resizeCanvas();
-      fitView();
-    });
+    /* On RÉAJUSTE LA SURFACE, on ne recadre pas la vue.
+       `fitView()` recentrait et re-zoomait : ouvrir ou fermer la trappe
+       déplaçait le dessin sous les yeux de l'utilisateur. Le canvas garde son
+       origine et son viewportTransform, donc les objets restent exactement à
+       la même place à l'écran — seul le bord droit de la surface change. */
+    syncStageSurface();
   };
 
   // Bouton bas de la sidebar droite
@@ -610,10 +630,9 @@ function setTool(tool) {
     brushProps.hidden = tool !== 'brush';
     els.rightSidebar.classList.toggle('brush-mode', tool === 'brush');
     if (tool === 'brush') {
-      els.rightSidebar.classList.remove('collapsed');
+      openRightPanel();
       requestAnimationFrame(() => {
         brushProps.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        resizeCanvas();
       });
     }
   }
@@ -3336,7 +3355,7 @@ function bindVectorTools() {
 
   const toolsBtn = $('btnVectorTools');
   if (toolsBtn) toolsBtn.addEventListener('click', () => {
-    els.rightSidebar.classList.remove('collapsed');
+    openRightPanel();
     requestAnimationFrame(() => {
       const target = document.querySelector('.props-section[data-section="tools"]');
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -4965,7 +4984,7 @@ function bindPages() {
   if (next) next.addEventListener('click', () => gotoPage(state.activePage + 1));
   const current = $('pageCurrent');
   if (current) current.addEventListener('click', () => {
-    els.rightSidebar.classList.remove('collapsed');
+    openRightPanel();
     requestAnimationFrame(() => {
       const section = document.querySelector('.props-section[data-section="pages"]');
       if (section) section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -5914,10 +5933,9 @@ function focusPlugins() {
     widgetsApi.raise('plugins');
     return;
   }
-  els.rightSidebar.classList.remove('collapsed');
+  openRightPanel();
   const target = document.getElementById('section-plugins');
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  if (window.BirdWidgets) BirdWidgets.publish();
 }
 
 function defineCommands() {
@@ -6632,13 +6650,60 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
+/* ── La surface suit la scène, quelle qu'en soit la cause ──────
+   Les règles et le canvas portent une largeur en PIXELS (l'inline style de
+   updateRulers, et la taille du bitmap Fabric) : elle ne suit pas le CSS.
+   Chaque trappe de droite a donc besoin d'un resize, et deux chemins
+   existaient — le bouton « de la sidebar (qui resizait) et l'en-tête ••• de
+   widgets.js (qui ne resizait pas). Résultat : en ouvrant la trappe, la règle
+   restait à 894 px pour une scène de 718 px ; en la refermant, elle restait à
+   894 px pour 912 px et laissait un VIDE de 18 px à l'endroit de la trappe.
+
+   Un ResizeObserver sur la scène supprime la question : toute variation de
+   taille, d'où qu'elle vienne (trappe, fenêtre, future mise en page), passe
+   par le même chemin.
+
+   Pas de rAF intermédiaire : le ResizeObserver est déjà notifié au plus une
+   fois par frame, et un rAF serait gelé dans un onglet en arrière-plan — la
+   surface ne se remettrait à jour qu'au retour de l'utilisateur.
+
+   Aucun risque de boucle : le canvas et les règles sont en position absolue
+   dans la scène, leur taille ne modifie donc jamais celle de la scène. */
+let _stageSize = { w: 0, h: 0 };
+
+function syncStageSurface() {
+  if (!els.stage) return;
+  const r = els.stage.getBoundingClientRect();
+  const w = Math.round(r.width);
+  const h = Math.round(r.height);
+  if (w === _stageSize.w && h === _stageSize.h) return;
+  _stageSize = { w: w, h: h };
+  resizeCanvas();
+}
+
+// Toujours actif : le ResizeObserver ne délivre pas dans un onglet en
+// arrière-plan, alors qu'un `resize` de fenêtre est un évènement synchrone.
+window.addEventListener('resize', syncStageSurface);
+
+if (typeof ResizeObserver === 'function') {
+  // Couvre ce que `resize` ne voit pas : la largeur d'un panneau, sans
+  // changement de fenêtre.
+  new ResizeObserver(syncStageSurface).observe(els.stage);
+} else {
+  // Repli sans ResizeObserver : la fin de transition du panneau est le seul
+  // signal disponible pour une trappe qui s'ouvre ou se ferme.
+  document.addEventListener('transitionend', (e) => {
+    if (e.target === els.rightSidebar || e.target === els.leftSidebar) syncStageSurface();
+  });
+}
+
 /* ════════════════════════════════════════════════════════════
    API PUBLIQUE (intégration Astro / Rust / automatisation)
 ════════════════════════════════════════════════════════════ */
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.3.1',
+  version: '2.4.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
@@ -6646,7 +6711,10 @@ window.Bird = {
     rulers: setRulers,
     grid: setGrid,
     snap: setSnap,
-    sync: syncViewToggles
+    sync: syncViewToggles,
+    /* Réajuste la surface du canvas à la scène. Utile à un hôte qui
+       redimensionne l'iframe, et point d'entrée unique pour les trappes. */
+    resize: syncStageSurface
   },
   get widgets() { return widgetsApi; },
   get plugins() { return window.BirdPlugins || null; },

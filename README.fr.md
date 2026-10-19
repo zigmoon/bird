@@ -365,6 +365,33 @@ dans `css/style.css`, `js/app.js` ou `index.html` (écart max-min des canaux > 8
 et la CI l’exécute avant chaque publication. Les exceptions légitimes se
 déclarent en ligne avec `check-ui:allow <raison>`.
 
+### Les trappes ne touchent jamais au plan de travail
+
+Un document s’ouvre **sans aucun outil d’affichage actif** : ni règles, ni
+magnétisme, ni grille. `scripts/check-ui.mjs` fait échouer le build si l’état
+initial ou le bouton de la barre haute prétend le contraire.
+
+Ouvrir ou fermer la trappe de droite ne doit jamais déplacer ce qu’on dessine.
+Deux choses rendaient cela faux, toutes deux corrigées à la racine :
+
+* **`fitView()` à chaque repli.** La trappe recadrait la vue, donc recentrait et
+  re-zoomait tout le document. Replier un panneau change la *surface*, pas la
+  *vue* : le canvas garde son origine et son `viewportTransform`, les objets
+  restent au même endroit à l’écran. Pour redimensionner sans rien déplacer,
+  appeler `Bird.view.resize()` — exposé aussi pour les hôtes.
+* **Un vide au bord de la trappe.** Les règles et le canvas portent des tailles
+  en **pixels** (largeur en ligne, bitmap Fabric) qui ne suivent pas le CSS.
+  Ouvrir la trappe laissait une règle de 894 px sur une scène de 718 px ; la
+  fermer laissait un vide de 18 px à l’endroit de la trappe. Un `ResizeObserver`
+  sur la scène et un écouteur `resize` pilotent désormais un seul
+  `syncStageSurface()`, et tout chemin qui ouvre le panneau passe par
+  `openRightPanel()`, qui redimensionne en même temps qu’il ouvre.
+
+La largeur du panneau n’est volontairement **pas animée** : l’animer demande un
+redimensionnement de canvas par frame, et entre deux frames la règle est plus
+courte que la scène — un vide visible. Elle s’ouvre d’un coup, la mesure est donc
+exacte immédiatement.
+
 ### Thème jour / nuit
 
 Le bouton lune / soleil, à gauche des *Préférences*, bascule le thème ; le choix

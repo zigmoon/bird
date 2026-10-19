@@ -331,6 +331,11 @@ function init(options) {
   if (header) header.addEventListener('click', function (e) {
     if (e.target.closest('button')) return;
     sidebar.classList.toggle('collapsed');
+    // Le canvas et les règles portent des tailles en pixels : ils doivent
+    // suivre la scène. `publish()` met le widget de zoom à jour, l'appel
+    // ci-dessous réajuste la surface — sans recadrer la vue, donc sans
+    // déplacer le dessin de l'utilisateur.
+    if (window.Bird && Bird.view && Bird.view.resize) Bird.view.resize();
     publish();
   });
   var dockAllBtn = document.getElementById('propsDockAll');
@@ -385,6 +390,6 @@ function init(options) {
   };
 }
 
-global.BirdWidgets = { init: init, publish: publish, version: '2.3.1' };
+global.BirdWidgets = { init: init, publish: publish, version: '2.4.0' };
 
 })(window);
