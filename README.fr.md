@@ -502,9 +502,9 @@ Choisissez le fichier de votre machine :
 | macOS Apple Silicon (M1–M4) | `Bird_*_aarch64.dmg` | ouvrir le `.dmg`, glisser Bird dans *Applications* |
 | macOS Intel | `Bird_*_x64.dmg` | idem |
 | Windows | `Bird_*_x64-setup.exe` | l’exécuter (ou le `.msi` pour un déploiement géré) |
-| Linux, toute distribution | `*.AppImage` | `chmod +x bird-*.AppImage`, puis l’exécuter — rien à installer |
-| Debian / Ubuntu | `*.deb` | `sudo apt install ./bird_*.deb` |
-| Fedora / RHEL | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+| Linux, toute distribution | `Bird_*_amd64.AppImage` | `chmod +x Bird_*.AppImage`, puis l’exécuter — rien à installer |
+| Debian / Ubuntu | `Bird_*_amd64.deb` | `sudo apt install ./Bird_*.deb` |
+| Fedora / RHEL | `Bird-*-1.x86_64.rpm` | `sudo dnf install ./Bird-*.rpm` |
 
 Les paquets ne sont **ni signés ni notariés** — il n’y a ni certificat Apple ni
 clé de signature Windows dans ce dépôt, et prétendre le contraire ne ferait que

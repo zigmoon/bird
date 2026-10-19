@@ -426,9 +426,9 @@ Pick the file for your machine:
 | macOS, Apple Silicon (M1–M4) | `Bird_*_aarch64.dmg` | open the `.dmg`, drag Bird to *Applications* |
 | macOS, Intel | `Bird_*_x64.dmg` | same |
 | Windows | `Bird_*_x64-setup.exe` | run it (or the `.msi` for managed installs) |
-| Linux, any distro | `*.AppImage` | `chmod +x bird-*.AppImage`, then run it — nothing to install |
-| Debian / Ubuntu | `*.deb` | `sudo apt install ./bird_*.deb` |
-| Fedora / RHEL | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+| Linux, any distro | `Bird_*_amd64.AppImage` | `chmod +x Bird_*.AppImage`, then run it — nothing to install |
+| Debian / Ubuntu | `Bird_*_amd64.deb` | `sudo apt install ./Bird_*.deb` |
+| Fedora / RHEL | `Bird-*-1.x86_64.rpm` | `sudo dnf install ./Bird-*.rpm` |
 
 The bundles are **not signed or notarised** — there is no Apple certificate or
 Windows signing key in this repository, and pretending otherwise would just

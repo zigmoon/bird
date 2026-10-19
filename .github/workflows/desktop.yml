@@ -225,9 +225,9 @@ jobs:
             | **macOS** (Apple Silicon M1–M4) | `Bird_*_aarch64.dmg` | Ouvrir le `.dmg`, glisser Bird dans Applications |
             | **macOS** (Intel) | `Bird_*_x64.dmg` | idem |
             | **Windows** | `Bird_*_x64-setup.exe` ou `Bird_*_x64_fr-FR.msi` | L'exe NSIS est le plus simple |
-            | **Linux** | `*.AppImage` | `chmod +x` puis double-clic — aucune installation |
-            | **Linux** (Debian/Ubuntu) | `*.deb` | `sudo apt install ./bird_*.deb` |
-            | **Linux** (Fedora) | `*.rpm` | `sudo dnf install ./bird-*.rpm` |
+            | **Linux** | `Bird_*_amd64.AppImage` | `chmod +x Bird_*.AppImage` puis exécution — aucune installation |
+            | **Linux** (Debian/Ubuntu) | `Bird_*_amd64.deb` | `sudo apt install ./Bird_*.deb` |
+            | **Linux** (Fedora) | `Bird-*-1.x86_64.rpm` | `sudo dnf install ./Bird-*.rpm` |
 
             ### Raccourcis
             Les raccourcis suivent Adobe (Illustrator) et Figma : `Ctrl` sur Windows et
