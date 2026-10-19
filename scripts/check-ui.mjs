@@ -239,62 +239,93 @@ function checkTranslationSource() {
   }
 }
 
-/* ── 6. Une montée de version ne touche pas les dépendances ──
-   Le numéro de version de l'application a été remplacé à l'aveugle dans
-   les fichiers de verrouillage : `icu_properties`, `icu_collections` et
-   quatre autres crates — légitimement en 2.3.0 — se sont retrouvés en
-   2.3.1, version qui n'existe pas. La compilation de l'application de
-   bureau échouait sur les trois systèmes (« failed to select a version
-   for the requirement icu_properties »).
+/* ── 6. Le numéro de version est le même partout ──────────────
+   Une montée de version faite à la main oublie toujours un fichier : un
+   manifeste, un lockfile, ou les clés `?v=` de index.html. Un fichier
+   oublié ne casse rien visiblement — il fige simplement l'ancienne
+   ressource dans le cache du visiteur.
 
-   Ici on ne vérifie pas « les fichiers sont cohérents » — Cargo le fait
-   et c'est trop tard — mais la cause : notre version ne doit apparaître
-   QUE sur nos propres paquets. */
-function checkLockfileVersions() {
+   À ne PAS faire ici : comparer la version d'un crate tiers à la nôtre.
+   Un premier jet de ce contrôle le faisait et a bloqué la CI sur
+   `icu_provider 2.3.1`, qui porte légitimement le même numéro que
+   l'application par pure coïncidence. On vérifie donc l'égalité de NOS
+   fichiers entre eux, jamais celle des dépendances. */
+function checkVersionConsistency() {
   const appVersion = (() => {
     const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
     const m = app.match(/^\s*version:\s*'([\d.]+)'/m);
     return m ? m[1] : null;
   })();
   if (!appVersion) {
-    errors.push('js/app.js — version de l’application introuvable (contrôle des lockfiles impossible)');
+    errors.push('js/app.js — version de l’application introuvable');
     return;
   }
 
-  const cargo = path.join(root, 'desktop', 'src-tauri', 'Cargo.lock');
-  if (fs.existsSync(cargo)) {
-    // Le fichier est en CRLF sous Windows : sans ce nettoyage, `^...$` ne
-    // matche jamais et le contrôle passe toujours au vert (vérifié).
-    const lines = fs.readFileSync(cargo, 'utf8').split('\n').map((l) => l.replace(/\r$/, ''));
+  const expect = (rel, actual, label) => {
+    if (actual === null || actual === undefined) { errors.push(`${rel} — ${label} introuvable`); return; }
+    if (String(actual) !== appVersion) {
+      errors.push(
+        `${rel} — version ${actual}, alors que js/app.js annonce ${appVersion} (${label})\n` +
+        '    Une montée de version a oublié ce fichier.'
+      );
+    }
+  };
+
+  const readJson = (rel) => {
+    try { return JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8')); }
+    catch (e) { errors.push(`${rel} — JSON invalide : ${e.message}`); return null; }
+  };
+
+  for (const rel of ['astro/package.json', 'desktop/package.json']) {
+    if (!fs.existsSync(path.join(root, rel))) continue;
+    const j = readJson(rel);
+    if (j) expect(rel, j.version, 'champ version');
+  }
+  for (const rel of ['astro/package-lock.json', 'desktop/package-lock.json']) {
+    if (!fs.existsSync(path.join(root, rel))) continue;
+    const j = readJson(rel);
+    if (j) expect(rel, j.packages && j.packages[''] && j.packages[''].version, 'version racine');
+  }
+
+  const toml = path.join(root, 'desktop', 'src-tauri', 'Cargo.toml');
+  if (fs.existsSync(toml)) {
+    const m = fs.readFileSync(toml, 'utf8').match(/^version\s*=\s*"([\d.]+)"/m);
+    expect('desktop/src-tauri/Cargo.toml', m && m[1], 'champ version');
+  }
+
+  const cargoLock = path.join(root, 'desktop', 'src-tauri', 'Cargo.lock');
+  if (fs.existsSync(cargoLock)) {
+    // CRLF sous Windows : sans ce nettoyage, `^...$` ne matche jamais.
+    const lines = fs.readFileSync(cargoLock, 'utf8').split('\n').map((l) => l.replace(/\r$/, ''));
     let name = null;
+    let ourVersion = null;
     for (const line of lines) {
       const n = line.match(/^name = "(.+)"$/);
       if (n) { name = n[1]; continue; }
       const v = line.match(/^version = "(.+)"$/);
-      if (v && name && v[1] === appVersion && name !== 'bird-desktop') {
-        errors.push(
-          `desktop/src-tauri/Cargo.lock — le crate tiers « ${name} » porte la version ${appVersion}\n` +
-          '    C’est la version de l’application, pas la sienne : une montée de version\n' +
-          '    a été appliquée à l’aveugle sur tout le fichier. Seul `bird-desktop` doit changer.'
-        );
-      }
+      if (v && name === 'bird-desktop') ourVersion = v[1];
     }
+    expect('desktop/src-tauri/Cargo.lock', ourVersion, 'version de bird-desktop');
   }
 
-  for (const rel of ['astro/package-lock.json', 'desktop/package-lock.json']) {
-    const file = path.join(root, rel);
-    if (!fs.existsSync(file)) continue;
-    let json;
-    try { json = JSON.parse(fs.readFileSync(file, 'utf8')); }
-    catch (e) { errors.push(`${rel} — JSON invalide : ${e.message}`); continue; }
-    for (const [key, info] of Object.entries(json.packages || {})) {
-      if (key === '' || !info || info.version !== appVersion) continue;
-      errors.push(
-        `${rel} — le paquet « ${key.replace(/^node_modules\//, '')} » porte la version ${appVersion}\n` +
-        '    C’est la version de l’application : une montée de version a été appliquée\n' +
-        '    à l’aveugle. Régénérer le fichier avec `npm install --package-lock-only`.'
-      );
-    }
+  // Clés de cache : la vraie régression passée, c'est un asset référencé SANS
+  // `?v=` — le service worker Astro sert alors l'ancien fichier pendant des
+  // semaines (c'est ce qui a laissé l'ancien logo à l'écran).
+  //
+  // On n'exige PAS que la clé vaille la version de l'application : plusieurs
+  // modules portent leur propre version (history.js, commands.js, widgets.js),
+  // délibérément distincte. L'égalité stricte produisait un faux positif.
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const missing = [];
+  for (const m of html.matchAll(/(?:src|href)="((?:css|js|icons)\/[^"]+)"/g)) {
+    if (!/[?&]v=/.test(m[1])) missing.push(m[1]);
+  }
+  if (missing.length) {
+    errors.push(
+      `index.html — ${missing.length} asset(s) sans clé de cache : ${missing.slice(0, 5).join(', ')}\n` +
+      '    Une URL sans `?v=` reste figée dans le cache du visiteur (et dans le\n' +
+      '    service worker de la version Astro, qui est cache-first).'
+    );
   }
 }
 
@@ -303,7 +334,7 @@ checkWhiteIcons();
 checkReferences();
 checkMonochrome();
 checkTranslationSource();
-checkLockfileVersions();
+checkVersionConsistency();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -311,5 +342,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, versions des lockfiles');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions');
 for (const n of notes) console.log('  · ' + n);
