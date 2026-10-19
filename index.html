@@ -691,7 +691,20 @@
         </div>
         <button class="btn btn-ghost" id="btnResetDoc">Réinitialiser</button>
       </div>
-      <div class="settings-foot">Bird — éditeur vectoriel · v1.5</div>
+      <div class="settings-foot"><span class="settings-version">Bird — éditeur vectoriel</span> · <kbd>F1</kbd> pour les raccourcis</div>
+    </div>
+  </div>
+</div>
+
+<!-- Raccourcis clavier — généré depuis le registre de commandes -->
+<div class="modal-overlay" id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" hidden>
+  <div class="modal-card shortcuts-card">
+    <div class="modal-head">
+      <span id="shortcutsTitle">Raccourcis clavier</span>
+      <button class="modal-close" id="shortcutsClose" title="Fermer" aria-label="Fermer">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="shortcutsList" class="shortcuts-list"></div>
     </div>
   </div>
 </div>
@@ -911,8 +924,10 @@
 <script src="js/icc.js?v=2.0.0"></script>
 <script src="js/pdfx.js?v=2.0.0"></script>
 <script src="js/vector-tools.js?v=2.0.0"></script>
-<script src="js/history.js?v=2.0.0"></script>
-<script src="js/widgets.js?v=2.0.0"></script>
+<script src="js/history.js?v=3.0.0"></script>
+<script src="js/commands.js?v=3.0.0"></script>
+<script src="js/native.js?v=3.0.0"></script>
+<script src="js/widgets.js?v=3.0.0"></script>
 <script src="js/plugins.js?v=2.0.0"></script>
 <script src="js/app.js?v=2.0.0"></script>
 </body>

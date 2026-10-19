@@ -8,15 +8,15 @@ import Layout from '../layouts/Layout.astro';
       <h1>Dessinez.<br />Importez.<br /><em>Exportez.</em></h1>
       <p>
         Bird est un éditeur vectoriel complet dans le navigateur : plume Bézier,
-        calques, règles et repères, Pathfinder, texte éditable, import
-        <b>SVG · PDF · AI · EPS</b> et export <b>SVG ou PDF vectoriel</b>.
+        calques, règles et repères, Pathfinder, texte éditable, plans de travail
+        multiples, import <b>SVG · PDF · AI · EPS</b> et export <b>SVG, PDF ou PDF/X-1a</b>.
         Aucune installation, aucun compte, vos documents restent chez vous.
       </p>
       <div class="hero-actions">
         <a class="cta" href="/editor">Ouvrir l’éditeur</a>
         <a class="cta cta--ghost" href="/docs">Voir la documentation</a>
       </div>
-      <div class="hero-note">Gratuit · local-first · PWA · fonctionne hors ligne après le premier chargement</div>
+      <div class="hero-note">Gratuit · local-first · PWA · application de bureau macOS, Windows et Linux</div>
     </div>
     <div class="hero-card" aria-hidden="true">
       <div class="hero-card-head">
@@ -48,14 +48,16 @@ import Layout from '../layouts/Layout.astro';
       <article class="feature"><span class="feature-num">02</span><h3>Calques</h3><p>Sélection, renommage, visibilité, verrouillage et ordre des objets. L’organisation d’un vrai document.</p></article>
       <article class="feature"><span class="feature-num">03</span><h3>Règles & repères</h3><p>Règles dynamiques, repères déplaçables, grille et magnétisme sur les bords, centres et objets.</p></article>
       <article class="feature"><span class="feature-num">04</span><h3>Pathfinder</h3><p>Union, soustraction, intersection et exclusion vectorielles, sans rasterisation.</p></article>
-      <article class="feature"><span class="feature-num">05</span><h3>Import PDF / AI</h3><p>Les .ai modernes sont des PDF : Bird les ouvre en objets Fabric éditables via pdf.js.</p></article>
+      <article class="feature"><span class="feature-num">05</span><h3>Import PDF / AI</h3><p>Les .ai modernes sont des PDF : Bird les ouvre en objets Fabric éditables. Un PDF multi-pages donne un plan de travail par page.</p></article>
       <article class="feature"><span class="feature-num">06</span><h3>Import EPS</h3><p>Interpréteur PostScript Adobe Illustrator niveau 2 : chemins, couleurs, clips, courbes.</p></article>
-      <article class="feature"><span class="feature-num">07</span><h3>Export PDF vectoriel</h3><p>svg2pdf + jsPDF produisent un PDF compatible Illustrator, pas une capture d’écran.</p></article>
-      <article class="feature"><span class="feature-num">08</span><h3>Export SVG & raster</h3><p>SVG document ou sélection, PNG transparent, JPG, WEBP, échelles 1× à 4×.</p></article>
-      <article class="feature"><span class="feature-num">09</span><h3>Texte éditable</h3><p>Polices, corps, gras, italique, souligné, barré, alignement. Le texte reste du texte.</p></article>
-      <article class="feature"><span class="feature-num">10</span><h3>Historique fiable</h3><p>Annuler / rétablir couvre aussi les réglages du panneau, les déplacements et les verrouillages.</p></article>
-      <article class="feature"><span class="feature-num">11</span><h3>Sauvegarde locale</h3><p>localStorage + bascule IndexedDB au-delà de 4,2 Mo. Vos images ne quittent jamais l’appareil.</p></article>
-      <article class="feature"><span class="feature-num">12</span><h3>Pipette & presse-papiers</h3><p>Prélevez une couleur, collez un SVG ou une image, copiez votre sélection vers d’autres apps.</p></article>
+      <article class="feature"><span class="feature-num">07</span><h3>PDF/X-1a pour l’imprimeur</h3><p>CMJN, profils ICC, dégradés en shadings, texte vectorisé, fond perdu. Le fichier qu’un imprimeur accepte.</p></article>
+      <article class="feature"><span class="feature-num">08</span><h3>Export SVG & raster</h3><p>SVG document ou sélection, PDF multi-plans, PNG transparent, JPG, WEBP, échelles 1× à 4×.</p></article>
+      <article class="feature"><span class="feature-num">09</span><h3>Texte éditable</h3><p>Polices, corps, gras, italique, souligné, barré, alignement. Le texte reste du texte, ou devient courbes sur demande.</p></article>
+      <article class="feature"><span class="feature-num">10</span><h3>Historique incrémental</h3><p>Chaque état ne stocke que les objets modifiés : 50 annulations coûtent le prix d’une seule sauvegarde.</p></article>
+      <article class="feature"><span class="feature-num">11</span><h3>Panneaux détachables</h3><p>Chaque section du panneau de droite devient une fenêtre flottante, déplaçable et mémorisée.</p></article>
+      <article class="feature"><span class="feature-num">12</span><h3>Plans de travail multiples</h3><p>Comme les artboards d’Illustrator : format indépendant, sélecteur flottant, historique par plan.</p></article>
+      <article class="feature"><span class="feature-num">13</span><h3>Plug-ins</h3><p>Un fichier <code>.plugin.js</code> suffit : registre, panneau de réglages généré, motif vectoriel inclus.</p></article>
+      <article class="feature"><span class="feature-num">14</span><h3>Application de bureau</h3><p>macOS, Windows et Linux : menu système avec les raccourcis Adobe/Figma et fichiers natifs.</p></article>
     </div>
   </section>
 
@@ -72,13 +74,15 @@ import Layout from '../layouts/Layout.astro';
         <thead><tr><th>Format</th><th>Sens</th><th>Moteur</th><th>Résultat</th></tr></thead>
         <tbody>
           <tr><td><b>SVG / SVGZ</b></td><td>Import</td><td>Fabric + sanitizer</td><td>Objets vectoriels éditables</td></tr>
-          <tr><td><b>PDF</b></td><td>Import</td><td>pdf.js 3.11</td><td>Chemins, clips, couleurs, textes, images (page 1)</td></tr>
+          <tr><td><b>PDF</b></td><td>Import</td><td>pdf.js 3.11</td><td>Chemins, clips, couleurs, textes, images — multi-pages</td></tr>
           <tr><td><b>Adobe Illustrator .ai</b></td><td>Import</td><td>PDF ou PostScript</td><td>Vectoriel éditable</td></tr>
           <tr><td><b>EPS</b></td><td>Import</td><td>Interpréteur PostScript</td><td>Chemins Fabric</td></tr>
           <tr><td><b>SVG</b></td><td>Export</td><td>Fabric</td><td>Document ou sélection, fond au choix</td></tr>
           <tr><td><b>PDF</b></td><td>Export</td><td>svg2pdf + jsPDF</td><td>PDF vectoriel compatible Illustrator</td></tr>
+          <tr><td><b>PDF/X-1a</b></td><td>Export</td><td>Écrivain maison</td><td>CMJN, shadings réels, ICC, texte en courbes</td></tr>
           <tr><td><b>PNG / JPG / WEBP</b></td><td>Export</td><td>Canvas</td><td>Raster 1×–4×, transparence ou fond blanc</td></tr>
-          <tr><td><b>.plume</b></td><td>Projet</td><td>JSON v3</td><td>Document complet + calques + guides</td></tr>
+          <tr><td><b>.plume</b></td><td>Projet</td><td>JSON v3</td><td>Document complet + plans de travail + guides</td></tr>
+          <tr><td><b>.dmg / .msi / .deb</b></td><td>Bureau</td><td>Tauri 2</td><td>Application native macOS, Windows, Linux</td></tr>
         </tbody>
       </table>
     </div>
@@ -87,8 +91,8 @@ import Layout from '../layouts/Layout.astro';
   <section class="section" id="versions">
     <div class="section-head">
       <div>
-        <h2>Trois déclinaisons, un seul moteur</h2>
-        <p>Le même cœur vectoriel, disponible en web autonome, en site Astro et en boîte à outils Rust.</p>
+        <h2>Quatre déclinaisons, un seul moteur</h2>
+        <p>Le même cœur vectoriel, disponible en web autonome, en site Astro, en boîte à outils Rust et en application de bureau.</p>
       </div>
       <span>03 — Versions</span>
     </div>
@@ -110,6 +114,12 @@ import Layout from '../layouts/Layout.astro';
         <h3>Moteur natif</h3>
         <p>CLI et serveur local : inspection de projets, conversion SVG/PDF/EPS, validation de fichiers .plume.</p>
         <a class="cta cta--ghost" href="/docs#rust">Documentation</a>
+      </article>
+      <article class="version-card">
+        <span class="version-tag">Bureau</span>
+        <h3>macOS · Windows · Linux</h3>
+        <p>Coquille Tauri : menu système avec les raccourcis Adobe/Figma, fichiers natifs, installeurs signables.</p>
+        <a class="cta cta--ghost" href="/docs#desktop">Documentation</a>
       </article>
     </div>
   </section>

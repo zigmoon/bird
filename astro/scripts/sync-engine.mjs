@@ -44,6 +44,19 @@ function main() {
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   if (!bodyMatch) throw new Error('index.html : <body> introuvable');
 
+  // Les balises <script src> de index.html sont la seule source de vérité
+  // pour l'ordre de chargement du moteur. On les recopie ici au lieu de les
+  // maintenir à la main dans editor.astro : c'est exactement comme ça qu'un
+  // fichier peut être oublié et une fonction manquer à l'appel.
+  const scripts = [];
+  const scriptRe = /<script\b[^>]*\bsrc\s*=\s*"([^"]+)"[^>]*>\s*<\/script>/gi;
+  let match;
+  while ((match = scriptRe.exec(bodyMatch[1])) !== null) {
+    const src = match[1].split('?')[0].replace(/^js\//, '/assets/bird/js/');
+    scripts.push('<script src="' + src + '"></script>');
+  }
+  if (!scripts.length) throw new Error('index.html : aucun <script src> trouvé');
+
   let body = bodyMatch[1]
     .replace(/<script\b[\s\S]*?<\/script>/gi, '')
     .replace(/(src|href)="icons\//g, '$1="/assets/bird/icons/')
@@ -53,6 +66,7 @@ function main() {
   const generated = path.join(astroRoot, 'src', 'generated');
   fs.mkdirSync(generated, { recursive: true });
   fs.writeFileSync(path.join(generated, 'editor-shell.html'), body, 'utf8');
+  fs.writeFileSync(path.join(generated, 'editor-scripts.html'), scripts.join('\n') + '\n', 'utf8');
 
   // Manifeste PWA adapté aux routes Astro.
   const manifestPath = path.join(publicRoot, 'manifest.webmanifest');
@@ -77,6 +91,8 @@ function main() {
     size(path.join(assetsRoot, 'js')) + ' de JavaScript)');
   console.log('[bird-astro] shell éditeur → src/generated/editor-shell.html (' +
     (body.length / 1024).toFixed(1) + ' Ko)');
+  console.log('[bird-astro] scripts → src/generated/editor-scripts.html (' +
+    scripts.length + ' fichiers)');
 }
 
 main();

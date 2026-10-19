@@ -3,3 +3,6 @@ webapp/
 .generated/
 src-tauri/target/
 src-tauri/gen/
+# Icônes mobiles générées par `tauri icon` : Bird Desktop est une app de bureau.
+src-tauri/icons/android/
+src-tauri/icons/ios/

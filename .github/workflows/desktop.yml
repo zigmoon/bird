@@ -1,19 +1,103 @@
-name: Build Bird desktop (macOS · Windows · Linux)
+name: Build Bird — web, Rust, desktop (macOS · Windows · Linux)
 
-# Trois systèmes, trois artefacts. Windows ne peut pas fabriquer un .dmg et
-# macOS ne peut pas fabriquer un .msi : ces binaires ne peuvent naître que
-# d'une matrice de runners. C'est le seul endroit où ils sont produits.
+# Trois familles d'artefacts, trois runners.
+#
+# Windows ne peut pas fabriquer un .dmg et macOS ne peut pas fabriquer un
+# .msi : ces binaires ne peuvent naître que sur leur propre système. C'est
+# le seul endroit où les trois plateformes de bureau sont produites.
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  # ─────────────────────────────────────────────────────────────
+  # 1. Le moteur web doit compiler avant qu'on emballe quoi que ce soit.
+  # ─────────────────────────────────────────────────────────────
+  web:
+    name: Site Astro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: astro/package-lock.json
+      - name: Installer
+        working-directory: astro
+        run: npm ci
+      - name: Compiler
+        working-directory: astro
+        run: npm run build
+      - name: Vérifier que le shell éditeur charge tous les scripts du moteur
+        working-directory: astro
+        run: |
+          set -e
+          # Bibliothèques chargées à la demande : elles n'ont pas à figurer
+          # dans l'ordre de chargement initial.
+          lazy="eps-import.js jspdf.umd.min.js pdf.min.js pdf.worker.min.js svg2pdf.umd.min.js"
+          missing=0
+          for path in public/assets/bird/js/*.js; do
+            base=$(basename "$path")
+            case " $lazy " in *" $base "*) continue;; esac
+            if ! grep -q "$base" src/generated/editor-scripts.html; then
+              echo "::error::$base n'est pas chargé par editor.astro"
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0
+          echo "Tous les scripts du moteur sont chargés."
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. Le cœur Rust : tests et lint, sur les trois OS.
+  # ─────────────────────────────────────────────────────────────
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Tests
+        working-directory: rust
+        run: cargo test --workspace
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: La CLI fonctionne
+        working-directory: rust
+        shell: bash
+        run: |
+          cargo run -q -p bird-cli -- inspect examples/sample.plume
+          cargo run -q -p bird-cli -- to-svg examples/sample.plume out.svg
+          test -s out.svg
+
+  # ─────────────────────────────────────────────────────────────
+  # 3. Application de bureau : un installeur par système.
+  # ─────────────────────────────────────────────────────────────
+  desktop:
+    name: Bureau — ${{ matrix.label }}
+    runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,9 +115,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             label: Windows x64
 
-    name: ${{ matrix.label }}
-    runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +128,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -55,28 +138,40 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
+          key: ${{ matrix.target }}
 
       - name: Installer la CLI Tauri
         working-directory: desktop
-        run: npm install
+        run: npm ci
 
       - name: Générer les icônes (ico / icns / png)
         working-directory: desktop
         run: npx tauri icon ../icons/icon-512.png
 
-      - name: Assembler le front-end
+      - name: Assembler le moteur web
         working-directory: desktop
         run: node scripts/stage.mjs
 
-      - name: Compiler l'application
+      - name: Compiler l'application et ses installeurs
         working-directory: desktop
         run: npx tauri build --target ${{ matrix.target }}
+
+      - name: Vérifier que les installeurs existent
+        shell: bash
+        working-directory: desktop
+        run: |
+          set -e
+          dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          find "$dir" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) -exec ls -lh {} \;
+          count=$(find "$dir" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) | wc -l)
+          echo "Installeurs produits : $count"
+          test "$count" -ge 1
 
       - name: Publier les artefacts
         uses: actions/upload-artifact@v4
         with:
           name: bird-${{ matrix.target }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
@@ -86,8 +181,11 @@ jobs:
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
 
+  # ─────────────────────────────────────────────────────────────
+  # 4. Release : les installeurs attachés au tag.
+  # ─────────────────────────────────────────────────────────────
   release:
-    needs: build
+    needs: [desktop]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

@@ -9,7 +9,7 @@ pub fn export(project: &Project) -> String {
     let h = project.artboard.h;
     let mut body = String::new();
 
-    let bg = project.background().and_then(|c| normalize_hex(c));
+    let bg = project.background().and_then(normalize_hex);
     if let Some(color) = bg {
         body.push_str(&format!(
             "<rect x=\"0\" y=\"0\" width=\"{w:.3}\" height=\"{h:.3}\" fill=\"{}\"/>",
@@ -62,7 +62,7 @@ fn render_object(
     defs: &mut String,
     gradient_id: &mut usize,
 ) {
-    if boolv(object, "visible", true) == false {
+    if !boolv(object, "visible", true) {
         return;
     }
     let kind = strv(object, "type").unwrap_or("path");

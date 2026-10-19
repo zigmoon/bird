@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "bird-cli"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "bird-core",
  "serde_json",
@@ -12,7 +12,7 @@ dependencies = [
 
 [[package]]
 name = "bird-core"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "serde",
  "serde_json",

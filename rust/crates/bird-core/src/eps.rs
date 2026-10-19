@@ -34,7 +34,7 @@ pub fn export(project: &Project) -> String {
 
 fn render_objects(objects: &[Value], parent: Mat, page_h: f64, out: &mut String) {
     for object in objects {
-        if boolv(object, "visible", true) == false {
+        if !boolv(object, "visible", true) {
             continue;
         }
         let kind = strv(object, "type").unwrap_or("path");

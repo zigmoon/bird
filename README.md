@@ -40,8 +40,13 @@ pipeline is the one that got the most attention:
 npx serve .        # http://localhost:3000
 ```
 
-No build step for the web app. The Astro version (`astro/`) and the native shell
-(`desktop/`) wrap the *same* engine — one source of truth, not three.
+No build step for the web app. The Astro version (`astro/`), the Rust engine
+(`rust/`) and the native shell (`desktop/`) wrap the *same* engine — one source
+of truth, not four.
+
+Desktop installers (`.dmg`, `.msi`/`.exe`, `.deb`/`.rpm`/`.AppImage`) are built
+by CI on real macOS, Windows and Linux runners — a `.dmg` cannot be produced
+from Windows, and pretending otherwise is how teams ship broken bundles.
 
 ---
 
@@ -270,27 +275,41 @@ file. Every generated SVG goes through the same sanitiser as imports.
 
 ## Keyboard shortcuts
 
-`Cmd` is accepted everywhere `Ctrl` is, so the same build behaves natively on
-macOS.
+`Cmd` replaces `Ctrl` on macOS, so the same build behaves natively on every
+platform. The shortcuts follow Illustrator and Figma.
+
+Press <kbd>F1</kbd> in the app for the complete, generated list — it is built
+from the command registry (`js/commands.js`), so it can never drift from what
+the code actually handles.
 
 | Keys | Action |
 |---|---|
 | `V` `P` `N` `B` `I` | Select / Pen / Pencil / Brush / Eyedropper |
 | `R` `E` `L` `T` `H` | Rectangle / Ellipse / Line / Text / Hand |
 | `Space` (hold) | Temporary pan |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / Redo |
-| `Ctrl+A` `Ctrl+C` `Ctrl+X` `Ctrl+V` `Ctrl+D` | Select all, copy, cut, paste, duplicate |
+| `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` | New / Open / Save / Save as |
+| `Ctrl+Shift+P` / `Ctrl+E` / `Ctrl+P` | Place (import) / Export / Print |
+| `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` | Undo / Redo |
+| `Ctrl+X` `Ctrl+C` `Ctrl+V` `Ctrl+Shift+V` | Cut, copy, paste, paste in place |
+| `Ctrl+A` / `Ctrl+Shift+A` / `Ctrl+D` | Select all / deselect / duplicate |
 | `Ctrl+G` / `Ctrl+Shift+G` | Group / Ungroup |
-| `Ctrl+2` / `Ctrl+3` | Lock / hide selection |
-| `Ctrl+0` / `Shift+1` / `Shift+2` | Fit view / fit / zoom to selection |
-| `Ctrl+1` | Zoom 100 % |
-| `Ctrl+=` / `Ctrl+-` | Zoom in / out |
+| `Ctrl+]` `Ctrl+[` `Ctrl+Shift+]` `Ctrl+Shift+[` | Forward, backward, to front, to back |
+| `Ctrl+2` / `Ctrl+Alt+2` / `Ctrl+3` / `Ctrl+Alt+3` | Lock / unlock all / hide / show all |
+| `Ctrl+Shift+O` | Outline stroke |
+| `Ctrl+Shift+.` / `Ctrl+Shift+,` | Font size up / down |
+| `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` | Fit view / 100 % / zoom in / zoom out |
+| `Shift+1` / `Shift+2` | Fit / zoom to selection |
 | `Ctrl+R` / `Ctrl+'` / `Ctrl+;` | Rulers / grid / snapping |
 | `Ctrl+K` | Plug-ins |
 | `Ctrl+,` | Preferences |
 | `Ctrl+PageUp` / `Ctrl+PageDown` | Previous / next artboard |
+| `F1` / `F11` | Shortcut sheet / full screen |
 | `Delete`, arrows, `Shift+arrows` | Delete, nudge 1 px, nudge 10 px |
 | `Esc` / `Enter` | Cancel / finish the current path or guide drag |
+
+Every one of these is also a real menu item in the desktop builds (see
+[Desktop builds](#desktop-builds)) — a shortcut nobody can discover is a
+shortcut nobody uses.
 
 ---
 
@@ -311,6 +330,8 @@ bird/
 │   ├── pdfx.js                 PDF/X-1a writer (CMYK, shadings, output intent)
 │   ├── vector-tools.js         text→curves, outline, offset, simplify, symbols, blend
 │   ├── history.js              incremental undo/redo (object-interning, byte budget)
+│   ├── commands.js             command registry — keyboard, native menu, help sheet
+│   ├── native.js               Tauri bridge: dialogs, disk I/O, menu events
 │   ├── widgets.js              detachable panels
 │   ├── plugins.js              plug-in host, registry, settings drawer
 │   └── app.js                  application: tools, history, layers, export
@@ -345,8 +366,24 @@ Bird.io.svgPagesToPDF([{ svg, width, height }])
 ## Desktop builds
 
 `desktop/` is a thin **Tauri 2** shell around the same engine — no logic is
-duplicated. It adds native file dialogs, a real application window, and a
-signable binary per platform.
+duplicated. It adds:
+
+- a **native menu** (File, Edit, Object, View, Window, Help) carrying every
+  Adobe/Figma shortcut. Menu accelerators live at the OS level, so they keep
+  working even when the canvas does not have focus — and pressing
+  <kbd>F1</kbd> in a text field no longer scrolls the window;
+- **native file I/O**: `Ctrl+S` writes to the current path, `Ctrl+Shift+S`
+  opens the dialog, and every export (SVG, PDF, PDF/X, PNG, JPG, WEBP) writes a
+  real file instead of filling *Downloads*;
+- a real application window whose title follows the open document, plus
+  `.plume` / `.bird` file associations.
+
+The menu holds **no logic**. It emits `bird://command` with an identifier and
+the engine runs the matching command from `js/commands.js`. At startup
+`app_info` returns the list of accelerators the platform actually accepted: if
+a key combination is refused (some Linux window managers do), the webview
+keyboard handler takes it over instead of leaving the shortcut dead. Because a
+menu-managed accelerator never reaches the webview, no command can run twice.
 
 ```bash
 cd desktop
@@ -356,10 +393,19 @@ npm run dev        # development window
 npm run build      # installer for the current OS
 ```
 
+**Windows without Visual Studio** (MinGW-W64):
+
+```powershell
+$env:RUSTUP_TOOLCHAIN = 'stable-x86_64-pc-windows-gnu'
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = '<mingw>/bin/gcc.exe'
+npx tauri build --target x86_64-pc-windows-gnu
+```
+
 **macOS and Linux installers cannot be produced on Windows** (and vice versa):
 they need their own toolchain and code-signing. The GitHub Actions matrix in
-`.github/workflows/desktop.yml` builds all four targets on every `v*` tag and
-attaches the artefacts to the release:
+`.github/workflows/desktop.yml` builds all four targets on every `v*` tag — and
+on every push, so a broken bundle is caught immediately — and attaches the
+artefacts to the release:
 
 | Platform | Artefact |
 |---|---|
@@ -385,20 +431,30 @@ npm run dev
 npm run build
 ```
 
+`sync-engine.mjs` generates **both** `editor-shell.html` and
+`editor-scripts.html` from `index.html`. Adding a file to the engine therefore
+requires no edit to `editor.astro` — the CI fails the build if a script exists in
+`public/assets/bird/js/` without being loaded by the editor.
+
 Re-run `npm run sync` after changing `index.html`, the CSS, or a plug-in.
 
 ## Rust engine
 
 `rust/` is an independent Cargo workspace (no Node needed):
 
-- `bird-core` — `.plume` reading/writing, geometry, validation;
-- `bird-cli` — `info`, `export svg|json`, `serve`.
+- `bird-core` — `.plume` reading/writing, geometry, SVG/PDF/EPS export,
+  validation, static server;
+- `bird-cli` — `inspect`, `validate`, `to-svg`, `to-pdf`, `to-eps`, `serve`.
 
 ```bash
 cd rust
-cargo test
-cargo run -p bird-cli -- info examples/sample.plume
+cargo test                 # 14 tests
+cargo clippy -- -D warnings
+cargo run -p bird-cli -- inspect examples/sample.plume
 ```
+
+`scripts/build.ps1` (Windows) detects MSVC or MinGW-W64 and runs tests then a
+release build; `scripts/build.sh` does the same on Unix.
 
 ---
 

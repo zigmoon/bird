@@ -48,8 +48,11 @@ for (const file of COPY_FILES) {
 }
 
 // Version lisible par la coquille native (écran « À propos »).
+// On ancre l'expression sur l'API publique (`  version: 'x.y.z',`) : le
+// fichier contient d'autres chaînes de version (instantanés Fabric « 5.1.0 »)
+// et une recherche naïve tombait dessus.
 const appJs = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
-const version = (appJs.match(/version:\s*'([\d.]+)'/) || [])[1] || '0.0.0';
+const version = (appJs.match(/^ {2}version: '([\d.]+)',$/m) || [])[1] || '0.0.0';
 fs.writeFileSync(path.join(out, 'version.json'), JSON.stringify({ version }, null, 2));
 
 const size = (dir) =>

@@ -18,6 +18,7 @@ import Layout from '../layouts/Layout.astro';
       <a href="#api">API JavaScript</a>
       <a href="#astro">Version Astro</a>
       <a href="#rust">Version Rust</a>
+      <a href="#desktop">Application de bureau</a>
     </nav>
 
     <article class="docs-body">
@@ -41,7 +42,25 @@ npm run dev        # http://localhost:4321
 npm run build      # sortie dist/
 npm start          # serveur Node autonome`}</code></pre>
 
+      <h3>Application de bureau</h3>
+      <p>
+        La coquille Tauri embarque exactement le même moteur, avec en plus un menu système
+        qui porte les raccourcis, et l’accès disque natif (ouvrir, enregistrer, exporter sans
+        passer par le dossier « Téléchargements »).
+      </p>
+      <pre class="code"><code>{`cd bird/desktop
+npm install
+npm run dev      # fenêtre native en développement
+npm run build    # installeur de l’OS courant
+# macOS : .dmg · Windows : .msi/.exe · Linux : .deb/.AppImage/.rpm`}</code></pre>
+
       <h2 id="raccourcis">Raccourcis</h2>
+      <p>
+        Les raccourcis suivent Illustrator et Figma. <code>Ctrl</code> devient <code>⌘</code> sur
+        macOS. Dans l’application de bureau, ils sont portés par le <b>menu système</b> (Fichier,
+        Édition, Objet, Affichage) : ils fonctionnent donc même quand le plan de travail n’a pas
+        le focus. <kbd>F1</kbd> affiche la liste complète, générée depuis le registre de commandes.
+      </p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Touche</th><th>Action</th></tr></thead>
@@ -49,11 +68,19 @@ npm start          # serveur Node autonome`}</code></pre>
             <tr><td><code>V</code> / <code>P</code> / <code>N</code> / <code>B</code> / <code>I</code></td><td>Sélection / Plume / Crayon / Pinceau / Pipette</td></tr>
             <tr><td><code>R</code> / <code>E</code> / <code>L</code> / <code>T</code></td><td>Rectangle / Ellipse / Ligne / Texte</td></tr>
             <tr><td><code>H</code> ou <code>Espace</code></td><td>Main (déplacer la vue)</td></tr>
-            <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Shift+Z</code></td><td>Annuler / Rétablir</td></tr>
-            <tr><td><code>Ctrl+C</code> / <code>Ctrl+X</code> / <code>Ctrl+V</code></td><td>Copier / Couper / Coller (interne + SVG système)</td></tr>
-            <tr><td><code>Ctrl+D</code> / <code>Ctrl+G</code> / <code>Ctrl+Shift+G</code></td><td>Dupliquer / Grouper / Dégrouper</td></tr>
-            <tr><td><code>Ctrl+2</code> / <code>Ctrl+3</code></td><td>Verrouiller / Masquer la sélection</td></tr>
-            <tr><td><code>Ctrl+0</code> / <code>Maj+1</code> / <code>Maj+2</code></td><td>Ajuster à l’écran / Ajuster / Zoom sélection</td></tr>
+            <tr><td><code>Ctrl+N</code> / <code>Ctrl+O</code> / <code>Ctrl+S</code> / <code>Ctrl+Maj+S</code></td><td>Nouveau / Ouvrir / Enregistrer / Enregistrer sous</td></tr>
+            <tr><td><code>Ctrl+Maj+P</code> / <code>Ctrl+E</code> / <code>Ctrl+P</code></td><td>Importer un fichier / Exporter / Imprimer</td></tr>
+            <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Maj+Z</code> / <code>Ctrl+Y</code></td><td>Annuler / Rétablir</td></tr>
+            <tr><td><code>Ctrl+C</code> / <code>Ctrl+X</code> / <code>Ctrl+V</code> / <code>Ctrl+Maj+V</code></td><td>Copier / Couper / Coller / Coller sur place</td></tr>
+            <tr><td><code>Ctrl+D</code> / <code>Ctrl+A</code> / <code>Ctrl+Maj+A</code></td><td>Dupliquer / Tout sélectionner / Désélectionner</td></tr>
+            <tr><td><code>Ctrl+G</code> / <code>Ctrl+Maj+G</code></td><td>Grouper / Dégrouper</td></tr>
+            <tr><td><code>Ctrl+]</code> / <code>Ctrl+[</code> / <code>Ctrl+Maj+]</code> / <code>Ctrl+Maj+[</code></td><td>Avancer / Reculer / Premier plan / Arrière-plan</td></tr>
+            <tr><td><code>Ctrl+2</code> / <code>Ctrl+Alt+2</code> / <code>Ctrl+3</code> / <code>Ctrl+Alt+3</code></td><td>Verrouiller / Tout déverrouiller / Masquer / Tout afficher</td></tr>
+            <tr><td><code>Ctrl+Maj+O</code> / <code>Ctrl+Maj+.</code> / <code>Ctrl+Maj+,</code></td><td>Contour de trait / Corps + / Corps −</td></tr>
+            <tr><td><code>Ctrl+0</code> / <code>Ctrl+1</code> / <code>Ctrl+=</code> / <code>Ctrl+-</code></td><td>Ajuster à l’écran / 100 % / Zoom avant / Zoom arrière</td></tr>
+            <tr><td><code>Ctrl+R</code> / <code>Ctrl+'</code> / <code>Ctrl+;</code></td><td>Règles / Grille / Magnétisme</td></tr>
+            <tr><td><code>Ctrl+Page↑</code> / <code>Ctrl+Page↓</code></td><td>Plan de travail précédent / suivant</td></tr>
+            <tr><td><code>F1</code> / <code>F11</code> / <code>Ctrl+K</code> / <code>Ctrl+,</code></td><td>Raccourcis / Plein écran / Plug-ins / Préférences</td></tr>
             <tr><td><code>Suppr</code></td><td>Supprimer la sélection</td></tr>
             <tr><td><code>Flèches</code> / <code>Maj+Flèches</code></td><td>Déplacer de 1 px / 10 px</td></tr>
             <tr><td><code>Échap</code> / <code>Entrée</code></td><td>Terminer ou annuler un tracé</td></tr>
@@ -65,7 +92,7 @@ npm start          # serveur Node autonome`}</code></pre>
       <p>La détection se fait par <b>signature binaire</b>, pas uniquement par extension. Un <code>.ai</code> commençant par <code>%PDF-</code> est traité comme un PDF ; un <code>.ai</code> PostScript passe par l’interpréteur EPS.</p>
       <ul>
         <li><b>SVG / SVGZ</b> : nettoyage des scripts, <code>foreignObject</code>, gestionnaires <code>on*</code> et références externes, puis import Fabric.</li>
-        <li><b>PDF</b> : pdf.js reconstruit les chemins, clips, couleurs (RVB, gris, CMJN), opacités, images et textes. Seule la première page est importée.</li>
+        <li><b>PDF</b> : pdf.js reconstruit les chemins, clips, couleurs (RVB, gris, CMJN), opacités, images et textes. Un PDF multi-pages propose un sélecteur : première page, page choisie, ou <b>un plan de travail par page</b>.</li>
         <li><b>Adobe Illustrator</b> : les fichiers modernes sont des PDF ; les anciens sont du PostScript.</li>
         <li><b>EPS</b> : interpréteur PostScript Adobe Illustrator niveau 2 (moveto, lineto, curveto, v, y, arcs, clips, couleurs, gsave/grestore).</li>
         <li><b>Images</b> : PNG, JPG, WebP, GIF, BMP, AVIF. <b>Vidéos</b> : première frame.</li>
@@ -78,14 +105,17 @@ npm start          # serveur Node autonome`}</code></pre>
         <li><b>SVG</b> : document entier ou sélection, fond plan de travail / transparent / blanc.</li>
         <li><b>PDF vectoriel</b> : SVG → svg2pdf → jsPDF. Compatible Illustrator et imprimeurs.</li>
         <li><b>PNG / JPG / WEBP</b> : échelle 1× à 4×, transparence (PNG/WEBP) ou fond blanc (JPG).</li>
+        <li><b>PDF/X-1a:2001</b> : CMJN uniquement, dégradés en shadings, texte vectorisé, profil ICC déclaré et boîte de fond perdu. C’est le fichier à envoyer à l’imprimeur.</li>
+        <li><b>PDF multi-plans</b> : un PDF, une page par plan de travail, chacune à son format.</li>
         <li><b>Copie</b> : SVG ou image dans le presse-papiers système.</li>
-        <li><b>Projet</b> : <code>.plume</code> v3 (artboard, calques, guides, grille, objets Fabric).</li>
+        <li><b>Projet</b> : <code>.plume</code> v3 (plans de travail, calques, guides, grille, objets Fabric).</li>
       </ul>
 
       <h2 id="limites">Limites connues</h2>
       <ul>
-        <li>PDF : première page uniquement ; les polices cassées ou sans table Unicode ne peuvent pas être reconstruites en texte éditable.</li>
-        <li>PDF exporté : les polices non standard sont remplacées par Helvetica, Times ou Courier. Les dégradés complexes sont approximés.</li>
+        <li>PDF : les polices cassées ou sans table Unicode ne peuvent pas être reconstruites en texte éditable.</li>
+        <li>PDF écran : les polices non standard sont remplacées par Helvetica, Times ou Courier. Le PDF/X contourne cela en vectorisant le texte.</li>
+        <li>Le profil ICC livré (« Bird CMYK ») est structurellement valide mais générique : chargez le profil de votre imprimeur pour une conformité stricte.</li>
         <li>Les scripts et contenus actifs des SVG importés sont supprimés par sécurité.</li>
         <li>Le format <code>.ai</code> n’est jamais écrit : utilisez le PDF vectoriel, que Illustrator ouvre nativement.</li>
       </ul>
@@ -115,9 +145,11 @@ Bird.selection.hide()`}</code></pre>
       <h2 id="astro">Version Astro</h2>
       <p>
         Le dossier <code>bird/astro</code> est un vrai projet Astro 7 avec adaptateur Node.
-        Le DOM de l’éditeur est généré depuis <code>../index.html</code> (source unique) par
-        <code>scripts/sync-engine.mjs</code>, qui copie aussi <code>js/</code>, <code>css/</code> et
-        <code>icons/</code> dans <code>public/assets/bird/</code>.
+        Le DOM de l’éditeur <b>et l’ordre de chargement des scripts</b> sont générés depuis
+        <code>../index.html</code> (source unique) par <code>scripts/sync-engine.mjs</code>, qui copie
+        aussi <code>js/</code>, <code>css/</code>, <code>icons/</code> et <code>plugins/</code> dans
+        <code>public/assets/bird/</code>. Ajouter un fichier au moteur ne demande donc aucune
+        retouche d’<code>editor.astro</code>.
       </p>
       <ul>
         <li><code>/</code> : page marketing.</li>
@@ -156,6 +188,41 @@ cargo run -p bird-cli -- to-pdf examples/sample.plume out.pdf
 cargo run -p bird-cli -- to-eps examples/sample.plume out.eps
 cargo run -p bird-cli -- serve .. --port 8787`}</code></pre>
       <p class="muted">Voir <code>bird/rust/README.md</code> pour la grammaire des commandes et les conversions supportées.</p>
+
+      <h2 id="desktop">Application de bureau</h2>
+      <p>
+        <code>bird/desktop</code> est une coquille Tauri 2 : le moteur web est embarqué tel quel,
+        sans réécriture. Ce que la coquille ajoute :
+      </p>
+      <ul>
+        <li><b>Menu système</b> (Fichier, Édition, Objet, Affichage, Fenêtre, Aide) portant tous les
+          raccourcis Adobe/Figma — ils restent actifs même quand le plan de travail n’a pas le focus ;</li>
+        <li><b>Fichiers natifs</b> : <code>Ctrl+S</code> écrit au chemin courant, <code>Ctrl+Maj+S</code>
+          ouvre le dialogue, les exports SVG/PDF/PDF-X/PNG sortent en un appel binaire ;</li>
+        <li><b>Fenêtre d’application</b> avec titre reflétant le fichier ouvert, plein écran (F11),
+          association des fichiers <code>.plume</code> / <code>.bird</code>.</li>
+      </ul>
+      <p>
+        Le menu n’exécute aucune logique : il émet <code>bird://command</code> avec un identifiant, et
+        le moteur lance la commande correspondante via <code>BirdCommands</code>. Le nombre de
+        raccourcis réellement pris en charge par le menu est renvoyé au web au démarrage
+        (<code>app_info</code>) : si une plateforme refuse un accélérateur, le clavier du webview
+        reprend la touche au lieu de la laisser inerte.
+      </p>
+      <pre class="code"><code>{`# Compilation (une machine par système — c'est la matrice CI qui produit les trois)
+cd bird/desktop
+npx tauri icon ../icons/icon-512.png
+npm run build
+
+# Windows + MinGW-W64 (sans Visual Studio)
+$env:RUSTUP_TOOLCHAIN = 'stable-x86_64-pc-windows-gnu'
+$env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = '<mingw>/bin/gcc.exe'
+npx tauri build --target x86_64-pc-windows-gnu`}</code></pre>
+      <p class="muted">
+        Les installeurs macOS (.dmg) et Linux (.deb/.AppImage/.rpm) ne peuvent pas être produits
+        depuis Windows : <code>.github/workflows/desktop.yml</code> les construit sur les runners
+        correspondants, en artefacts téléchargeables et en release GitHub sur un tag <code>v*</code>.
+      </p>
     </article>
   </div>
 </Layout>

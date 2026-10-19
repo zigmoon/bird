@@ -783,6 +783,46 @@ input[type="range"]::-webkit-slider-thumb {
   padding-top: 12px; text-align: center;
   font-size: 9px; color: #1a1a1a; opacity: 0.35; letter-spacing: 0.5px;
 }
+.settings-foot kbd {
+  font-family: inherit; font-size: 9px; padding: 1px 4px;
+  border: 1px solid #d8d8d8; border-radius: 3px; background: #fff; color: #1a1a1a;
+}
+
+/* ── Raccourcis clavier ──
+   Deux colonnes de groupes : la liste complète tient à l'écran sans
+   défilement sur un portable, et se lit comme une feuille de référence. */
+.shortcuts-card { width: min(880px, calc(100vw - 40px)); max-height: calc(100dvh - 60px); }
+.shortcuts-card .modal-body { overflow-y: auto; }
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 34px;
+  padding: 4px 2px 8px;
+}
+.shortcuts-group {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  font-size: 8px; letter-spacing: 1.6px; text-transform: uppercase;
+  color: #999; border-bottom: 1px solid #eee; padding-bottom: 4px;
+}
+.shortcuts-group:first-child { margin-top: 0; }
+.shortcuts-rows { display: contents; }
+.shortcuts-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; font-size: 11px; padding: 2px 0; min-width: 0;
+}
+.shortcuts-row > span:first-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shortcuts-keys { display: inline-flex; gap: 3px; flex: 0 0 auto; }
+.shortcuts-keys kbd {
+  font-family: inherit; font-size: 9.5px; line-height: 1;
+  padding: 3px 5px; border: 1px solid #ddd; border-bottom-width: 2px;
+  border-radius: 3px; background: #fafafa; color: #1a1a1a; white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .shortcuts-list { grid-template-columns: 1fr; }
+}
 
 /* ── Atelier vectoriel IA ─────────────────────────────────── */
 .ai-overlay { background: rgba(12, 12, 15, .58); backdrop-filter: blur(3px); }

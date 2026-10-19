@@ -72,6 +72,9 @@ impl Mat {
     }
 
     /// `self` après `rhs` : le point est d'abord transformé par `rhs`, puis par `self`.
+    /// L'opérateur `*` fait la même chose ; la méthode nommée reste pour la
+    /// lisibilité des compositions en chaîne dans les exporteurs.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, rhs: Mat) -> Mat {
         Mat {
             a: self.a * rhs.a + self.c * rhs.b,
@@ -99,6 +102,13 @@ impl Mat {
             "matrix({:.4} {:.4} {:.4} {:.4} {:.4} {:.4})",
             self.a, self.b, self.c, self.d, self.e, self.f
         )
+    }
+}
+
+impl std::ops::Mul for Mat {
+    type Output = Mat;
+    fn mul(self, rhs: Mat) -> Mat {
+        Mat::mul(self, rhs)
     }
 }
 

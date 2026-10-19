@@ -67,7 +67,16 @@ dans les formats standards du dessin vectoriel (SVG, PDF, AI, EPS).
 - Bird.view.rulers(bool), Bird.view.grid(bool), Bird.view.snap(bool)
 - Bird.widgets.detach(name) / dock(name) / dockAll() / reset()
 - Bird.document.undo() / redo() / history() / edit(fn, label) : historique incrémental
+- Bird.commands.run(id) / list() / groups() : registre partagé clavier + menu natif
 - BirdPlugins.register(manifest), BirdPlugins.list(), BirdPlugins.toggle(id)
+
+## Raccourcis (Illustrator / Figma)
+
+Ctrl devient ⌘ sur macOS. F1 affiche la liste générée depuis le registre.
+Fichier : Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Maj+S / Ctrl+Maj+P / Ctrl+E / Ctrl+P
+Édition : Ctrl+Z / Ctrl+Maj+Z / Ctrl+Y / Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+Maj+V / Ctrl+D / Ctrl+A / Ctrl+Maj+A
+Objet : Ctrl+G / Ctrl+Maj+G / Ctrl+] / Ctrl+[ / Ctrl+Maj+] / Ctrl+Maj+[ / Ctrl+2 / Ctrl+Alt+2 / Ctrl+3 / Ctrl+Alt+3 / Ctrl+Maj+O
+Affichage : Ctrl+0 / Ctrl+1 / Ctrl+= / Ctrl+- / Ctrl+Alt+0 / Ctrl+R / Ctrl+' / Ctrl+; / F11
 
 ## Plug-ins
 
@@ -80,6 +89,7 @@ croix, grille, écailles. Sortie texture (un fabric.Pattern) ou vectorielle (for
 ## Versions
 
 - / : version web autonome (aucune compilation)
-- /astro/ : version Astro (SEO, PWA, routes API)
+- /astro/ : version Astro (SEO, PWA, routes API) — scripts générés depuis index.html
 - /rust/ : moteur Rust (CLI, serveur local, conversion de projets)
-- /desktop/ : coquille Tauri 2 → applis macOS, Windows et Linux (à compiler par OS)
+- /desktop/ : coquille Tauri 2 → applis macOS, Windows et Linux compilées par la CI
+  (menu système portant les raccourcis Adobe/Figma, fichiers natifs, .dmg/.msi/.deb/.AppImage)

@@ -313,31 +313,40 @@ Bird.pages.move(3, -1)
 
 ## Raccourcis
 
+`⌘` remplace `Ctrl` sur macOS : la même build se comporte nativement sur chaque
+plateforme. Les combinaisons suivent Illustrator et Figma.
+
+<kbd>F1</kbd> dans l’application affiche la liste complète, **générée depuis le
+registre de commandes** (`js/commands.js`) : elle ne peut pas diverger du code.
+
 | Touche | Action |
 |---|---|
-| `V` | Sélection |
-| `P` | Plume |
-| `N` | Crayon |
-| `B` | Pinceau vectoriel |
-| `I` | Pipette |
-| `R` / `E` / `L` / `T` | Rectangle / Ellipse / Ligne / Texte |
-| `H` ou `Espace` | Déplacer (main) |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | Annuler / Rétablir |
-| `Ctrl+A` | Tout sélectionner |
-| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copier / Couper / Coller (interne + presse-papiers SVG) |
-| `Ctrl+D` | Dupliquer |
-| `Ctrl+G` / `Ctrl+Shift+G` | Grouper / Dégrouper |
-| `Ctrl+2` / `Ctrl+3` | Verrouiller / Masquer la sélection |
-| `Ctrl+0` | Ajuster à l’écran |
+| `V` / `P` / `N` / `B` / `I` | Sélection / Plume / Crayon / Pinceau / Pipette |
+| `R` / `E` / `L` / `T` / `H` | Rectangle / Ellipse / Ligne / Texte / Main |
+| `Espace` | Déplacer la vue (maintenu) |
+| `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Maj+S` | Nouveau / Ouvrir / Enregistrer / Enregistrer sous |
+| `Ctrl+Maj+P` / `Ctrl+E` / `Ctrl+P` | Importer / Exporter / Imprimer |
+| `Ctrl+Z` / `Ctrl+Maj+Z` / `Ctrl+Y` | Annuler / Rétablir |
+| `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+Maj+V` | Couper / Copier / Coller / Coller sur place |
+| `Ctrl+A` / `Ctrl+Maj+A` / `Ctrl+D` | Tout sélectionner / Désélectionner / Dupliquer |
+| `Ctrl+G` / `Ctrl+Maj+G` | Grouper / Dégrouper |
+| `Ctrl+]` / `Ctrl+[` / `Ctrl+Maj+]` / `Ctrl+Maj+[` | Avancer / Reculer / Premier plan / Arrière-plan |
+| `Ctrl+2` / `Ctrl+Alt+2` / `Ctrl+3` / `Ctrl+Alt+3` | Verrouiller / Tout déverrouiller / Masquer / Tout afficher |
+| `Ctrl+Maj+O` | Contour de trait |
+| `Ctrl+Maj+.` / `Ctrl+Maj+,` | Corps de texte + / − |
+| `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` | Ajuster / 100 % / Zoom avant / Zoom arrière |
 | `Maj+1` / `Maj+2` | Ajuster à l’écran / Zoom sur la sélection |
-| `Ctrl+R` | Règles |
-| `Ctrl+'` | Grille |
-| `Ctrl+;` | Magnétisme |
-| `Ctrl+K` | Plug-ins |
+| `Ctrl+R` / `Ctrl+'` / `Ctrl+;` | Règles / Grille / Magnétisme |
+| `Ctrl+K` / `Ctrl+,` | Plug-ins / Préférences |
 | `Ctrl+Page↑` / `Ctrl+Page↓` | Plan de travail précédent / suivant |
+| `F1` / `F11` | Raccourcis / Plein écran |
 | `Suppr` | Supprimer |
 | `Flèches` / `Maj+Flèches` | Déplacer de 1 px / 10 px |
 | `Échap` / `Entrée` | Terminer / annuler un tracé (ou `Échap` pendant un glissement de repère) |
+
+Dans l’application de bureau, **chaque raccourci est aussi une entrée de menu**
+(Fichier, Édition, Objet, Affichage) — un raccourci que personne ne peut
+découvrir est un raccourci que personne n’utilise.
 
 ---
 
@@ -360,6 +369,8 @@ bird/
 │   ├── io.js                  échange : SVG, PDF/AI, EPS, export PDF, IndexedDB
 │   ├── eps-import.js          interpréteur PostScript (Illustrator niveau 2)
 │   ├── history.js             historique incrémental (interning d’objets, budget en octets)
+│   ├── commands.js            registre de commandes — clavier, menu natif, aide
+│   ├── native.js              pont Tauri : dialogues, disque, événements de menu
 │   ├── widgets.js             panneaux détachables (carte flottante + mémoire)
 │   ├── plugins.js             hôte de plug-ins : registre, tiroir, API
 │   ├── pdf.min.js             lecture PDF (pdf.js 3.11, chargé à la demande)
@@ -423,22 +434,63 @@ npm run dev
 npm run build     # sortie dist/ (adapter node)
 ```
 
-Le script `sync` extrait la coquille de l’éditeur depuis `../index.html` et copie les assets sous `public/assets/bird/` : toute modification de l’interface doit être suivie d’un `npm run sync`.
+Le script `sync` extrait la coquille de l’éditeur **et l’ordre de chargement des
+scripts** depuis `../index.html`, puis copie les assets sous
+`public/assets/bird/` : toute modification de l’interface doit être suivie d’un
+`npm run sync`. Ajouter un fichier au moteur ne demande aucune retouche
+d’`editor.astro` — et la CI échoue si un script présent sur disque n’est pas
+chargé par l’éditeur.
 
 ## Moteur Rust
 
 `rust/` est un espace de travail Cargo indépendant (aucun Node requis) :
 
-- `bird-core` — lecture/écriture du format `.plume`, géométrie, validation ;
-- `bird-cli` — `bird-cli info`, `bird-cli export svg|json`, `bird-cli serve`.
+- `bird-core` — lecture/écriture du format `.plume`, géométrie, export SVG/PDF/EPS, validation, serveur statique ;
+- `bird-cli` — `inspect`, `validate`, `to-svg`, `to-pdf`, `to-eps`, `serve`.
 
 ```bash
 cd rust
 cargo test                  # 14 tests
-cargo run -p bird-cli -- info examples/sample.plume
+cargo clippy -- -D warnings
+cargo run -p bird-cli -- inspect examples/sample.plume
 ```
 
-Sous Windows, `scripts/build.ps1` configure la chaîne MinGW WinLibs attendue par la machine de build.
+Sous Windows, `scripts/build.ps1` détecte MSVC ou MinGW-W64 WinLibs et teste
+puis compile la CLI ; `scripts/build.sh` fait de même sous Unix.
+
+## Application de bureau
+
+`desktop/` est une coquille **Tauri 2** autour du même moteur. Ce qu’elle
+ajoute :
+
+- un **menu système** (Fichier, Édition, Objet, Affichage, Fenêtre, Aide)
+  portant tous les raccourcis Adobe/Figma. Ils vivent au niveau de l’OS : ils
+  restent actifs même quand le plan de travail n’a pas le focus ;
+- l’**accès disque natif** : `Ctrl+S` écrit au chemin courant, `Ctrl+Maj+S`
+  ouvre le dialogue, chaque export (SVG, PDF, PDF/X, PNG, JPG, WEBP) produit un
+  vrai fichier au lieu d’encombrer « Téléchargements » ;
+- une fenêtre d’application dont le titre suit le document ouvert, plus
+  l’association des fichiers `.plume` / `.bird`.
+
+Le menu ne contient **aucune logique** : il émet `bird://command` avec un
+identifiant et le moteur exécute la commande correspondante. Au démarrage,
+`app_info` renvoie la liste des accélérateurs réellement acceptés par la
+plateforme : si une combinaison est refusée (certains gestionnaires de fenêtres
+Linux), le clavier du webview la reprend au lieu de la laisser morte. Et comme
+un accélérateur géré par le menu n’atteint jamais le webview, aucune commande ne
+peut s’exécuter deux fois.
+
+```bash
+cd desktop
+npm install
+npm run icons     # génère .ico / .icns / png depuis icons/icon-512.png
+npm run dev       # fenêtre native
+npm run build     # installeur de l’OS courant
+```
+
+Les installeurs macOS et Linux ne peuvent pas être produits depuis Windows :
+`.github/workflows/desktop.yml` les construit sur les runners correspondants, à
+chaque push et à chaque tag `v*`.
 
 ---
 

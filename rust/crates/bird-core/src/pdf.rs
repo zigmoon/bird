@@ -26,7 +26,7 @@ pub fn export(project: &Project) -> Vec<u8> {
 
 fn render_objects(objects: &[Value], parent: Mat, page_h: f64, content: &mut String) {
     for object in objects {
-        if boolv(object, "visible", true) == false {
+        if !boolv(object, "visible", true) {
             continue;
         }
         let kind = strv(object, "type").unwrap_or("path");
@@ -105,6 +105,10 @@ fn render_objects(objects: &[Value], parent: Mat, page_h: f64, content: &mut Str
     }
 }
 
+// Les huit paramètres sont la géométrie elle-même (position, taille, rayon,
+// matrice, hauteur de page, sortie). Les regrouper dans une structure
+// n'ajouterait qu'un niveau d'indirection à un calcul de tracé.
+#[allow(clippy::too_many_arguments)]
 fn path_rect(
     x: f64,
     y: f64,

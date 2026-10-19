@@ -1,6 +1,6 @@
 [package]
 name = "bird-desktop"
-version = "1.9.0"
+version = "2.0.0"
 description = "Bird — éditeur vectoriel local-first (coquille native)"
 authors = ["Zigmoon"]
 edition = "2021"
@@ -11,8 +11,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+# Le dialogue natif (ouvrir / enregistrer) est le seul plug-in gardé : la
+# lecture et l'écriture passent par nos propres commandes Rust, ce qui évite
+# toute configuration de portée `fs` et retire une dépendance du binaire.
 tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

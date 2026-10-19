@@ -1,6 +1,7 @@
 ---
 import EditorLayout from '../layouts/EditorLayout.astro';
 import shell from '../generated/editor-shell.html?raw';
+import engineScripts from '../generated/editor-scripts.html?raw';
 
 const title = 'Bird — Studio vectoriel | Import PDF/AI, export SVG/PDF';
 const description = 'Éditeur vectoriel local-first : Bézier, calques, règles, Pathfinder, plug-ins, panneaux détachables, import SVG/PDF/AI/EPS et export SVG ou PDF vectoriel. Sans compte.';
@@ -13,15 +14,6 @@ const description = 'Éditeur vectoriel local-first : Bézier, calques, règles,
     // les bibliothèques PDF/EPS chargées à la demande.
     window.BIRD_ASSET_BASE = '/assets/bird/js/';
   </script>
-  <script is:inline src="/assets/bird/js/fabric.min.js"></script>
-  <script is:inline src="/assets/bird/js/paper-full.min.js"></script>
-  <script is:inline src="/assets/bird/js/opentype.min.js"></script>
-  <script is:inline src="/assets/bird/js/io.js"></script>
-  <script is:inline src="/assets/bird/js/icc.js"></script>
-  <script is:inline src="/assets/bird/js/pdfx.js"></script>
-  <script is:inline src="/assets/bird/js/vector-tools.js"></script>
-  <script is:inline src="/assets/bird/js/history.js"></script>
-  <script is:inline src="/assets/bird/js/widgets.js"></script>
-  <script is:inline src="/assets/bird/js/plugins.js"></script>
-  <script is:inline src="/assets/bird/js/app.js"></script>
+  <!-- Ordre de chargement du moteur, repris de index.html par sync-engine.mjs -->
+  <Fragment set:html={engineScripts} />
 </EditorLayout>

@@ -232,6 +232,13 @@ function init() {
 
   bindToolbar();
   bindGroupingControls();
+  /* Le registre de commandes doit exister AVANT le clavier et avant le
+     menu natif : c'est lui qui décide ce qu'une touche déclenche. */
+  if (window.BirdCommands) {
+    BirdCommands.setPlatform(/mac/i.test(navigator.platform || '') ? 'mac' : 'other');
+    defineCommands();
+    renderShortcuts();
+  }
   bindProps();
   bindAlignment();
   bindLayerPanel();
@@ -239,6 +246,7 @@ function init() {
   bindStrokeControls();
   bindDocumentToggles();
   bindExportModal();
+  bindShortcutsModal();
   bindCanvas();
   bindKeyboard();
   bindSidebars();
@@ -418,6 +426,8 @@ function resetDocument() {
   pageHistory.clear();
   state.dirty = false;
   setDirty(false);
+  projectPath = null;
+  setDocumentTitle(null);
   renderGuides(true);
   renderLayers();
   renderPages();
@@ -2720,6 +2730,57 @@ function toggleVisibleSelection() {
   toast(target ? 'Sélection masquée' : 'Sélection affichée ✓');
 }
 
+/* ── « Tout déverrouiller » / « Tout afficher » (Ctrl+Alt+2 / Ctrl+Alt+3) ──
+   Indispensables dès qu'un objet masqué ou verrouillé n'est plus
+   sélectionnable : sans elles, l'objet est perdu pour l'utilisateur. */
+function unlockAll() {
+  const objs = canvas.getObjects().filter(o => o.birdLocked);
+  if (!objs.length) { toast('Aucun objet verrouillé'); return; }
+  beginPropChange();
+  objs.forEach(o => setObjectLocked(o, false));
+  setDirty(true);
+  canvas.requestRenderAll();
+  renderLayers();
+  toast(objs.length + (objs.length > 1 ? ' objets déverrouillés ✓' : ' objet déverrouillé ✓'));
+}
+
+function showAll() {
+  const objs = canvas.getObjects().filter(o => o.visible === false);
+  if (!objs.length) { toast('Aucun objet masqué'); return; }
+  beginPropChange();
+  objs.forEach(o => {
+    o.visible = true;
+    o.birdHidden = false;
+    o.evented = !o.birdLocked;
+  });
+  setDirty(true);
+  canvas.requestRenderAll();
+  renderLayers();
+  toast(objs.length + (objs.length > 1 ? ' objets affichés ✓' : ' objet affiché ✓'));
+}
+
+function deselectAll() {
+  canvas.discardActiveObject();
+  refreshActiveSelection();
+  updateGroupingUI();
+}
+
+/* Taille de police au clavier (Ctrl+Maj+. / Ctrl+Maj+, comme Illustrator). */
+function changeFontSize(delta) {
+  const objs = canvas.getActiveObjects().filter(o => o.type === 'i-text' || o.type === 'text' || o.type === 'textbox');
+  if (!objs.length) { toast('Sélectionnez un texte', true); return; }
+  beginPropChange();
+  objs.forEach(o => {
+    const size = Math.max(1, Math.round((o.fontSize || 16) + delta));
+    o.set({ fontSize: size });
+    o.set('dirty', true);
+  });
+  canvas.requestRenderAll();
+  refreshActiveSelection();
+  setDirty(true);
+  toast('Corps ' + Math.round(objs[0].fontSize) + ' px');
+}
+
 /* ════════════════════════════════════════════════════════════
    CONTRÔLES DE FORME, CONTOUR, FUSION
 ════════════════════════════════════════════════════════════ */
@@ -2914,34 +2975,42 @@ function bindViewToggles() {
 
 /* ════════════════════════════════════════════════════════════
    COQUILLE NATIVE (Tauri) — macOS / Windows / Linux
-   Le moteur est le même que dans le navigateur ; la coquille apporte
-   le disque natif et une vraie fenêtre. Ici on ne fait qu'adapter
-   l'affichage : libellé ⌘ sur macOS, version réelle du binaire.
+   ────────────────────────────────────────────────────────────
+   Le moteur est identique au web ; la coquille apporte le disque
+   natif, une vraie fenêtre et surtout le MENU SYSTÈME, qui porte les
+   raccourcis Adobe/Figma (⌘ sur macOS, Ctrl ailleurs).
+
+   Le menu émet des identifiants de commande ; le moteur les exécute.
+   Quand la plateforme a accepté l'accélérateur, on empêche le clavier
+   du webview de rejouer la même touche : sans ça, un Ctrl+Z natif
+   provoquerait DEUX annulations.
 ════════════════════════════════════════════════════════════ */
-function detectNativeShell() {
-  const tauri = window.__TAURI__;
-  if (!tauri) return;
+async function detectNativeShell() {
+  if (!window.BirdNative) return;
+  const info = await BirdNative.init();
+  if (!info.available) return;
+
+  const platform = BirdNative.platform;
   document.documentElement.dataset.shell = 'native';
-  const platform = (tauri.os && tauri.os.platform) ||
-    (navigator.userAgentData && navigator.userAgentData.platform) ||
-    navigator.platform || '';
-  const isMac = /mac/i.test(platform);
-  document.documentElement.dataset.platform = isMac ? 'mac' : (/win/i.test(platform) ? 'windows' : 'linux');
-  // Toutes les aides « Ctrl » deviennent « ⌘ » sur macOS : c'est ce que
-  // l'utilisateur a sous les doigts, pas une convention théorique.
-  if (isMac) {
+  document.documentElement.dataset.platform = platform;
+  if (window.BirdCommands) BirdCommands.setPlatform(platform);
+
+  if (platform === 'mac') {
     document.querySelectorAll('.empty-hint .kbd, kbd').forEach(el => {
       if (el.textContent.trim() === 'Ctrl') el.textContent = '⌘';
     });
     const title = document.querySelector('.empty-hint .kbd');
     if (title) title.innerHTML = title.innerHTML.replace(/Ctrl/g, '⌘');
   }
-  if (tauri.core && typeof tauri.core.invoke === 'function') {
-    tauri.core.invoke('app_info').then(info => {
-      Bird.native = info;
-      document.title = 'Bird ' + info.version + ' — Éditeur vectoriel';
-    }).catch(() => {});
-  }
+
+  Bird.native = info.info || {};
+  BirdNative.onCommand(runNativeCommand);
+  renderShortcuts();
+
+  const version = (info.info && info.info.version) || Bird.version || '';
+  document.title = 'Bird ' + version + ' — Éditeur vectoriel';
+  const versionNode = document.querySelector('.settings-version');
+  if (versionNode) versionNode.textContent = 'Bird ' + version + ' · ' + platform;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -3062,54 +3131,64 @@ function replaceObject(oldObj, newObj, label) {
   setDirty(true);
 }
 
+/* Actions du panneau « Outils vectoriels », exposées comme fonctions nommées :
+   le bouton, le menu natif et le clavier appellent la MÊME implémentation. */
+function outlineTextSelection() {
+  const objs = requireSelection();
+  if (!objs) return;
+  let done = 0;
+  const failed = [];
+  objs.slice().forEach(obj => {
+    try {
+      beginTxn();
+      const result = BirdVector.vectorizeTextObject(canvas, obj, { silent: true });
+      if (result) { commitUndo('Texte en courbes'); done++; }
+      else failed.push(obj.fontFamily || 'police inconnue');
+    } catch (e) { failed.push(e.message); }
+  });
+  if (done) {
+    renderLayers();
+    setDirty(true);
+    toast(done + (done > 1 ? ' textes convertis' : ' texte converti') + ' en courbes ✓');
+  }
+  if (failed.length) toast('Police non chargée : ' + failed[0], true);
+}
+
+function outlineStrokeSelection() {
+  const objs = requireSelection();
+  if (!objs) return;
+  let done = 0;
+  objs.slice().forEach(obj => {
+    try {
+      const result = BirdVector.outlineStroke(obj);
+      if (result) { replaceObject(obj, result, 'Contour de trait'); done++; }
+    } catch (e) { toast(e.message || 'Contour impossible', true); }
+  });
+  if (done) toast('Contour vectorisé ✓');
+}
+
+function simplifySelection() {
+  const objs = requireSelection();
+  if (!objs) return;
+  objs.slice().forEach(obj => {
+    try {
+      const result = BirdVector.simplifyPath(obj, 2);
+      replaceObject(obj, result, 'Simplification');
+      const stats = result.birdSimplified || { before: 0, after: 0 };
+      toast('Simplifié : ' + stats.before + ' → ' + stats.after + ' points');
+    } catch (e) { toast(e.message || 'Simplification impossible', true); }
+  });
+}
+
 function bindVectorTools() {
   const outlineTextBtn = $('toolOutlineText');
-  if (outlineTextBtn) outlineTextBtn.addEventListener('click', () => {
-    const objs = requireSelection();
-    if (!objs) return;
-    let done = 0, failed = [];
-    objs.slice().forEach(obj => {
-      try {
-        beginTxn();
-        const result = BirdVector.vectorizeTextObject(canvas, obj, { silent: true });
-        if (result) { commitUndo('Texte en courbes'); done++; }
-        else failed.push(obj.fontFamily || 'police inconnue');
-      } catch (e) { failed.push(e.message); }
-    });
-    if (done) {
-      renderLayers(); setDirty(true);
-      toast(done + (done > 1 ? ' textes convertis' : ' texte converti') + ' en courbes ✓');
-    }
-    if (failed.length) toast('Police non chargée : ' + failed[0], true);
-  });
+  if (outlineTextBtn) outlineTextBtn.addEventListener('click', outlineTextSelection);
 
   const outlineBtn = $('toolOutlineStroke');
-  if (outlineBtn) outlineBtn.addEventListener('click', () => {
-    const objs = requireSelection();
-    if (!objs) return;
-    objs.slice().forEach(obj => {
-      try {
-        const result = BirdVector.outlineStroke(obj);
-        replaceObject(obj, result, 'Contour de trait');
-      } catch (e) { toast(e.message || 'Contour impossible', true); }
-    });
-    toast('Contour vectorisé ✓');
-  });
+  if (outlineBtn) outlineBtn.addEventListener('click', outlineStrokeSelection);
 
   const simplifyBtn = $('toolSimplify');
-  if (simplifyBtn) simplifyBtn.addEventListener('click', () => {
-    const objs = requireSelection();
-    if (!objs) return;
-    objs.slice().forEach(obj => {
-      try {
-        const result = BirdVector.simplifyPath(obj, 2);
-        const before = result.birdSimplified ? result.birdSimplified.before : 0;
-        replaceObject(obj, result, 'Simplification');
-        const after = result.birdSimplified ? result.birdSimplified.after : 0;
-        toast('Simplifié : ' + before + ' → ' + after + ' points');
-      } catch (e) { toast(e.message || 'Simplification impossible', true); }
-    });
-  });
+  if (simplifyBtn) simplifyBtn.addEventListener('click', simplifySelection);
 
   const offsetRange = $('offsetAmount');
   if (offsetRange) {
@@ -3415,6 +3494,22 @@ function syncIccUI() {
   }
 }
 
+/* Ouverture programmatique du panneau d'export (menu natif, Ctrl+E).
+   Le panneau reste la seule porte d'entrée : un export lancé sans
+   réglages visibles serait une surprise désagréable. */
+let openExportModal = null;
+
+function showExportPanel(format) {
+  if (!openExportModal) return;
+  if (format) {
+    state.exportFormat = format;
+    document.querySelectorAll('#exportFormats .export-format').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.format === format);
+    });
+  }
+  openExportModal();
+}
+
 function bindExportModal() {
   const modal = $('exportModal');
   if (!modal) return;
@@ -3432,6 +3527,7 @@ function bindExportModal() {
     modal.hidden = false;
     syncExportUI();
   };
+  openExportModal = open;
   const close = () => { modal.hidden = true; };
 
   document.querySelectorAll('#exportFormats .export-format').forEach(btn => {
@@ -4270,19 +4366,20 @@ function cutSelection() {
   });
 }
 
-function pasteSelection() {
+function pasteSelection(inPlace) {
   if (!clipboardObject) return;
   clipboardObject.clone(clone => {
     beginTxn(); // état AVANT l'ajout
     canvas.discardActiveObject();
-    clone.set({ left: (clone.left || 0) + 20, top: (clone.top || 0) + 20, evented: true });
+    const offset = inPlace ? 0 : 20;
+    clone.set({ left: (clone.left || 0) + offset, top: (clone.top || 0) + offset, evented: true });
     if (clone.type === 'activeSelection') clone.canvas = canvas;
     canvas.add(clone);
     canvas.setActiveObject(clone);
-    commitUndo('Coller');
+    commitUndo(inPlace ? 'Coller sur place' : 'Coller');
     setDirty(true);
     refreshActiveSelection();
-    toast('Collé');
+    toast(inPlace ? 'Collé sur place' : 'Collé');
   });
 }
 
@@ -5420,7 +5517,24 @@ function buildSVGString(w, h, opts) {
     new Date().toISOString() + ' — ' + Math.round(bounds.width) + '×' + Math.round(bounds.height) + '</metadata>');
 }
 
+/* En application de bureau, un export est un FICHIER, pas un
+   téléchargement : dialogue natif, puis écriture binaire. C'est le même
+   point d'entrée pour SVG, PDF, PDF/X, PNG, JPG et WEBP. */
+function saveNative(filename, data, msg) {
+  const ext = (String(filename).split('.').pop() || '').toLowerCase();
+  const filters = [{ name: ext.toUpperCase(), extensions: [ext] }];
+  return BirdNative.saveFile(filename, data, filters)
+    .then((path) => {
+      if (path) toast((msg || 'Exporté') + ' → ' + BirdNative.basename(path));
+    })
+    .catch((err) => toast('Export impossible : ' + (err && err.message || err), true));
+}
+
 function downloadBlob(blob, filename, msg) {
+  if (nativeShell()) {
+    saveNative(filename, blob, msg);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -5433,6 +5547,14 @@ function downloadBlob(blob, filename, msg) {
 }
 
 function downloadDataURL(dataURL, filename, msg) {
+  if (nativeShell()) {
+    const comma = dataURL.indexOf(',');
+    const binary = atob(dataURL.slice(comma + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    saveNative(filename, bytes, msg);
+    return;
+  }
   const a = document.createElement('a');
   a.href = dataURL;
   a.download = filename;
@@ -5448,15 +5570,56 @@ function escapeXml(s) {
 
 /* ════════════════════════════════════════════════════════════
    ENREGISTRER UN FICHIER .plume
+   ────────────────────────────────────────────────────────────
+   Navigateur : téléchargement.
+   Application de bureau : écriture sur disque au chemin courant, ou
+   dialogue natif au premier enregistrement. `Ctrl+S` ne redemande
+   donc plus où enregistrer à chaque fois — c'est ce qu'on attend
+   d'une application, pas d'une page web.
 ════════════════════════════════════════════════════════════ */
-function saveFile() {
+let projectPath = null;
+
+function nativeShell() {
+  return !!(window.BirdNative && BirdNative.ready);
+}
+
+function setDocumentTitle(name) {
+  const base = 'Bird ' + (Bird.version || '') + ' — Éditeur vectoriel';
+  document.title = name ? name + ' — ' + base : base;
+  const label = document.querySelector('.brand-name');
+  if (label) label.textContent = name ? name : 'BIRD';
+}
+
+async function saveFile(opts) {
+  opts = opts || {};
   if (state.penActive) {
     if (state.penPoints.length >= 2) finalizePen(state.penClosed);
     else endPen(false);
   }
   if (state.textCreating) finalizeText();
   const payload = createProjectPayload();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  const json = JSON.stringify(payload, null, 2);
+
+  if (nativeShell()) {
+    try {
+      let path = opts.forceDialog ? null : projectPath;
+      if (path) {
+        await BirdNative.writeText(path, json);
+      } else {
+        path = await BirdNative.saveFile('bird-' + timestamp() + '.plume', json, 'project');
+      }
+      if (!path) { toast('Enregistrement annulé'); return; }
+      projectPath = path;
+      setDirty(false);
+      setDocumentTitle(BirdNative.basename(path));
+      toast('Enregistré : ' + BirdNative.basename(path) + ' ✓');
+    } catch (err) {
+      toast('Enregistrement impossible : ' + (err && err.message || err), true);
+    }
+    return;
+  }
+
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -5476,6 +5639,30 @@ function openFile(e) {
   const file = e.target.files[0];
   e.target.value = '';
   if (file) importFile(file);
+}
+
+/* Ouverture native : dialogue du système, puis lecture disque.
+   On réutilise exactement le même chemin d'import que le web. */
+async function openProject() {
+  if (!nativeShell()) {
+    if (els.fileOpen) els.fileOpen.click();
+    return;
+  }
+  try {
+    const picked = await BirdNative.openFile(['project', 'vector', 'image']);
+    if (!picked) return;
+    if (typeof picked.text === 'string') {
+      openFileContent(picked.text, picked.name);
+      projectPath = /\.(plume|bird|json)$/i.test(picked.name) ? picked.path : null;
+      setDocumentTitle(BirdNative.basename(picked.path));
+    } else {
+      projectPath = null;
+      setDocumentTitle(picked.name);
+      await importFile(new File([picked.bytes], picked.name));
+    }
+  } catch (err) {
+    toast('Ouverture impossible : ' + (err && err.message || err), true);
+  }
 }
 
 /* Ouvre un fichier à partir de son contenu texte (déjà lu) */
@@ -5500,10 +5687,209 @@ function openFileContent(content, name) {
 /* ════════════════════════════════════════════════════════════
    CLAVIER
 ════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   COMMANDES — une définition, trois appelants
+   ────────────────────────────────────────────────────────────
+   Le clavier, le menu natif (Fichier / Édition / Objet / Affichage)
+   et le panneau « Raccourcis » lisent la MÊME liste. Ajouter une
+   action à un seul endroit suffit : impossible qu'un raccourci du
+   menu et un raccourci clavier divergent.
+════════════════════════════════════════════════════════════ */
+function nativeOwns(id) {
+  return !!(window.BirdNative && BirdNative.ready && BirdNative.ownsCommand(id));
+}
+
+function isTextInputFocused() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable === true;
+}
+
+function focusPlugins() {
+  if (widgetsApi && widgetsApi.isDetached('plugins')) {
+    widgetsApi.raise('plugins');
+    return;
+  }
+  els.rightSidebar.classList.remove('collapsed');
+  const target = document.getElementById('section-plugins');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (window.BirdWidgets) BirdWidgets.publish();
+}
+
+function defineCommands() {
+  const C = window.BirdCommands;
+  if (!C) {
+    console.warn('[Bird] registre de commandes absent');
+    return;
+  }
+  C.defineAll([
+    /* ── Fichier ── */
+    { id: 'file.new', group: 'Fichier', label: 'Nouveau document', keys: 'Mod+N', run: resetDocument },
+    { id: 'file.open', group: 'Fichier', label: 'Ouvrir…', keys: 'Mod+O', run: openProject },
+    { id: 'file.save', group: 'Fichier', label: 'Enregistrer', keys: 'Mod+S', run: () => saveFile() },
+    { id: 'file.saveAs', group: 'Fichier', label: 'Enregistrer sous…', keys: 'Mod+Shift+S', run: () => saveFile({ forceDialog: true }) },
+    { id: 'file.import', group: 'Fichier', label: 'Importer un fichier…', keys: 'Mod+Shift+P', run: openProject },
+    { id: 'file.export', group: 'Fichier', label: 'Exporter…', keys: 'Mod+E', run: () => { const b = $('btnExport'); if (b) b.click(); } },
+    { id: 'file.exportPdfX', group: 'Fichier', label: 'Exporter en PDF/X-1a…', keys: [], run: () => { showExportPanel('pdfx'); } },
+    { id: 'file.print', group: 'Fichier', label: 'Imprimer…', keys: 'Mod+P', run: printDocument },
+
+    /* ── Édition ── */
+    { id: 'edit.undo', group: 'Édition', label: 'Annuler', keys: 'Mod+Z', run: undo },
+    { id: 'edit.redo', group: 'Édition', label: 'Rétablir', keys: 'Mod+Shift+Z', run: redo },
+    { id: 'edit.redoAlt', group: 'Édition', label: 'Rétablir (variante Windows)', keys: 'Mod+Y', run: redo },
+    { id: 'edit.cut', group: 'Édition', label: 'Couper', keys: 'Mod+X', run: cutSelection },
+    { id: 'edit.copy', group: 'Édition', label: 'Copier', keys: 'Mod+C', run: copySelection },
+    { id: 'edit.paste', group: 'Édition', label: 'Coller', keys: 'Mod+V', run: () => pasteSelection(false) },
+    { id: 'edit.pasteInPlace', group: 'Édition', label: 'Coller sur place', keys: 'Mod+Shift+V', run: () => pasteSelection(true) },
+    { id: 'edit.duplicate', group: 'Édition', label: 'Dupliquer', keys: 'Mod+D', run: duplicate },
+    { id: 'edit.delete', group: 'Édition', label: 'Supprimer', keys: [], run: deleteSelection },
+    { id: 'edit.selectAll', group: 'Édition', label: 'Tout sélectionner', keys: 'Mod+A', run: selectAll },
+    { id: 'edit.deselect', group: 'Édition', label: 'Désélectionner', keys: 'Mod+Shift+A', run: deselectAll },
+
+    /* ── Objet (ordre, verrouillage, vectorisation) ── */
+    { id: 'object.group', group: 'Objet', label: 'Grouper', keys: 'Mod+G', run: groupSelection },
+    { id: 'object.ungroup', group: 'Objet', label: 'Dégrouper', keys: 'Mod+Shift+G', run: ungroupSelection },
+    { id: 'object.front', group: 'Objet', label: 'Premier plan', keys: 'Mod+Shift+]', run: () => zOrder('front') },
+    { id: 'object.forward', group: 'Objet', label: 'Avancer d’un rang', keys: 'Mod+]', run: () => zOrder('forward') },
+    { id: 'object.backward', group: 'Objet', label: 'Reculer d’un rang', keys: 'Mod+[', run: () => zOrder('backward') },
+    { id: 'object.back', group: 'Objet', label: 'Arrière-plan', keys: 'Mod+Shift+[', run: () => zOrder('back') },
+    { id: 'object.lock', group: 'Objet', label: 'Verrouiller / déverrouiller', keys: 'Mod+2', run: toggleLockSelection },
+    { id: 'object.unlockAll', group: 'Objet', label: 'Tout déverrouiller', keys: 'Mod+Alt+2', run: unlockAll },
+    { id: 'object.hide', group: 'Objet', label: 'Masquer / afficher', keys: 'Mod+3', run: toggleVisibleSelection },
+    { id: 'object.showAll', group: 'Objet', label: 'Tout afficher', keys: 'Mod+Alt+3', run: showAll },
+    { id: 'object.outlineStroke', group: 'Objet', label: 'Contour de trait', keys: 'Mod+Shift+O', run: outlineStrokeSelection },
+    { id: 'object.textToCurves', group: 'Objet', label: 'Texte en courbes', keys: [], run: outlineTextSelection },
+    { id: 'object.simplify', group: 'Objet', label: 'Simplifier le tracé', keys: [], run: simplifySelection },
+
+    /* ── Texte ── */
+    { id: 'text.bigger', group: 'Texte', label: 'Corps plus grand', keys: 'Mod+Shift+.', run: () => changeFontSize(2) },
+    { id: 'text.smaller', group: 'Texte', label: 'Corps plus petit', keys: 'Mod+Shift+,', run: () => changeFontSize(-2) },
+
+    /* ── Affichage ── */
+    { id: 'view.zoomIn', group: 'Affichage', label: 'Zoom avant', keys: 'Mod+=', run: () => setZoom(state.zoom * 1.25) },
+    { id: 'view.zoomOut', group: 'Affichage', label: 'Zoom arrière', keys: 'Mod+-', run: () => setZoom(state.zoom / 1.25) },
+    { id: 'view.fit', group: 'Affichage', label: 'Ajuster à l’écran', keys: 'Mod+0', run: fitView },
+    { id: 'view.actual', group: 'Affichage', label: 'Taille réelle (100 %)', keys: 'Mod+1', run: () => setZoom(1) },
+    { id: 'view.selection', group: 'Affichage', label: 'Zoom sur la sélection', keys: ['Mod+Alt+0', 'Shift+2'], run: zoomToSelection },
+    { id: 'view.rulers', group: 'Affichage', label: 'Règles', keys: 'Mod+R', run: () => { setRulers(!state.showRulers); toast(state.showRulers ? 'Règles affichées' : 'Règles masquées'); } },
+    { id: 'view.grid', group: 'Affichage', label: 'Grille', keys: 'Mod+\'', run: () => { setGrid(!state.showGrid); toast(state.showGrid ? 'Grille affichée' : 'Grille masquée'); } },
+    { id: 'view.snap', group: 'Affichage', label: 'Magnétisme', keys: 'Mod+;', run: () => { setSnap(!state.snapEnabled); toast(state.snapEnabled ? 'Magnétisme activé' : 'Magnétisme désactivé'); } },
+    { id: 'view.fullscreen', group: 'Affichage', label: 'Plein écran', keys: 'F11', run: toggleFullscreen },
+    { id: 'view.panel', group: 'Affichage', label: 'Panneau de droite', keys: 'Mod+Alt+P', run: toggleRightPanel },
+
+    /* ── Plans de travail ── */
+    { id: 'page.next', group: 'Plans de travail', label: 'Plan suivant', keys: 'Mod+PageDown', run: () => { if (state.pages.length > 1) gotoPage(state.activePage + 1); } },
+    { id: 'page.prev', group: 'Plans de travail', label: 'Plan précédent', keys: 'Mod+PageUp', run: () => { if (state.pages.length > 1) gotoPage(state.activePage - 1); } },
+
+    /* ── Aide ── */
+    { id: 'help.shortcuts', group: 'Aide', label: 'Raccourcis clavier', keys: 'F1', run: openShortcuts },
+    { id: 'help.plugins', group: 'Aide', label: 'Plug-ins', keys: 'Mod+K', run: focusPlugins },
+    { id: 'help.prefs', group: 'Aide', label: 'Préférences', keys: 'Mod+,', run: () => { if ($('btnSettings')) $('btnSettings').click(); } },
+    { id: 'help.docs', group: 'Aide', label: 'Documentation', keys: [], run: openDocs }
+  ]);
+}
+
+/** Le menu natif passe par ici : même chemin que le clavier. */
+function runNativeCommand(id) {
+  if (isTextInputFocused()) {
+    // Le menu a intercepté Ctrl+Z avant le champ de saisie : on lui rend
+    // l'annulation native, sinon taper dans un champ ferait annuler le dessin.
+    if (id === 'edit.undo' || id === 'edit.redo' || id === 'edit.redoAlt') {
+      try { document.execCommand(id === 'edit.undo' ? 'undo' : 'redo'); } catch (err) { /* sans objet */ }
+      return;
+    }
+    if (/^(edit|object|view|page)\./.test(id)) return;
+  }
+  if (window.BirdCommands) BirdCommands.run(id);
+}
+
+function toggleFullscreen() {
+  if (window.BirdNative && BirdNative.ready) return; // le menu natif s'en charge
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+
+function toggleRightPanel() {
+  els.rightSidebar.classList.toggle('collapsed');
+  publishSidebarWidth();
+}
+
+function printDocument() {
+  if (window.BirdNative && BirdNative.ready && BirdNative.platform === 'mac') {
+    toast('Sur macOS : Exporter en PDF, puis Imprimer depuis Aperçu', true);
+    return;
+  }
+  window.print();
+}
+
+function openDocs() {
+  const url = 'https://github.com/zigmoon/bird#readme';
+  if (window.BirdNative && BirdNative.ready) {
+    __TAURI__.core.invoke('open_external', { url }).catch(() => window.open(url, '_blank'));
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+function openShortcuts() {
+  const modal = $('shortcutsModal');
+  if (!modal) return;
+  renderShortcuts();
+  modal.hidden = false;
+}
+
+function bindShortcutsModal() {
+  const modal = $('shortcutsModal');
+  if (!modal) return;
+  const close = () => { modal.hidden = true; };
+  if ($('shortcutsClose')) $('shortcutsClose').addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', (e) => {
+    if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+}
+
+/** Construit le tableau des raccourcis depuis le registre (jamais désynchronisé). */
+function renderShortcuts() {
+  const host = $('shortcutsList');
+  if (!host || !window.BirdCommands) return;
+  const platform = BirdCommands.platform;
+  const frag = document.createDocumentFragment();
+  BirdCommands.groups(platform).forEach((group) => {
+    const title = document.createElement('div');
+    title.className = 'shortcuts-group';
+    title.textContent = group.name;
+    frag.appendChild(title);
+    const table = document.createElement('div');
+    table.className = 'shortcuts-rows';
+    group.items.forEach((item) => {
+      if (!item.keys.length) return;
+      const row = document.createElement('div');
+      row.className = 'shortcuts-row';
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      const keys = document.createElement('span');
+      keys.className = 'shortcuts-keys';
+      item.keys.forEach((text) => {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = text;
+        keys.appendChild(kbd);
+      });
+      row.appendChild(label);
+      row.appendChild(keys);
+      table.appendChild(row);
+    });
+    frag.appendChild(table);
+  });
+  host.textContent = '';
+  host.appendChild(frag);
+}
+
 function bindKeyboard() {
   document.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
     const cmd = e.metaKey || e.ctrlKey;
 
     if (e.code === 'Space' && !e.repeat) {
@@ -5515,75 +5901,21 @@ function bindKeyboard() {
       return;
     }
 
-    if (cmd && (e.key === 'z' || e.key === 'Z')) {
-      e.preventDefault();
-      if (e.shiftKey) redo(); else undo();
-      return;
-    }
-    if (cmd && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
-    if (cmd && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); duplicate(); return; }
-    if (cmd && (e.key === 'g' || e.key === 'G')) {
-      e.preventDefault();
-      if (e.shiftKey) ungroupSelection(); else groupSelection();
-      return;
-    }
-    if (cmd && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveFile(); return; }
-    if (cmd && (e.key === 'a' || e.key === 'A')) { e.preventDefault(); selectAll(); return; }
-    if (cmd && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); copySelection(); return; }
-    if (cmd && (e.key === 'x' || e.key === 'X')) { e.preventDefault(); cutSelection(); return; }
-    if (cmd && (e.key === 'v' || e.key === 'V')) { e.preventDefault(); pasteSelection(); return; }
-    if (cmd && (e.key === '2' || e.code === 'Digit2')) { e.preventDefault(); toggleLockSelection(); return; }
-    if (cmd && (e.key === '3' || e.code === 'Digit3')) { e.preventDefault(); toggleVisibleSelection(); return; }
-    if (cmd && (e.key === '0' || e.code === 'Digit0')) { e.preventDefault(); fitView(); return; }
-    // Raccourcis « Adobe » classiques, valables aussi en Cmd sur macOS.
-    if (cmd && (e.key === '=' || e.key === '+' || e.code === 'Equal')) {
-      e.preventDefault(); setZoom(state.zoom * 1.25); return;
-    }
-    if (cmd && (e.key === '-' || e.code === 'Minus')) {
-      e.preventDefault(); setZoom(state.zoom / 1.25); return;
-    }
-    if (cmd && (e.key === '1' || e.code === 'Digit1') && !e.shiftKey) {
-      e.preventDefault(); setZoom(1); return;
-    }
-    if (cmd && e.key === ',') {
-      e.preventDefault();
-      if ($('btnSettings')) $('btnSettings').click();
-      return;
-    }
-    if (cmd && (e.key === 'r' || e.key === 'R')) {
-      e.preventDefault();
-      setRulers(!state.showRulers);
-      toast(state.showRulers ? 'Règles affichées' : 'Règles masquées');
-      return;
-    }
-    if (cmd && (e.key === "'" || e.code === 'Quote')) {
-      e.preventDefault();
-      setGrid(!state.showGrid);
-      toast(state.showGrid ? 'Grille affichée' : 'Grille masquée');
-      return;
-    }
-    if (cmd && (e.key === ';' || e.code === 'Semicolon')) {
-      e.preventDefault();
-      setSnap(!state.snapEnabled);
-      toast(state.snapEnabled ? 'Magnétisme activé' : 'Magnétisme désactivé');
-      return;
-    }
-    if (cmd && (e.key === 'k' || e.key === 'K')) {
-      e.preventDefault();
-      if (window.BirdPlugins) {
-        els.rightSidebar.classList.remove('collapsed');
-        const target = document.getElementById('section-plugins');
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    /* 1. Commandes — le registre décide, le menu natif a priorité.
+       Dans l'application de bureau, le raccourci appartient au menu :
+       le webview ne reçoit alors même pas l'événement, mais si la
+       plateforme a refusé l'accélérateur, c'est cette branche qui
+       rattrape la touche. */
+    if (cmd || e.key === 'F1' || e.key === 'F11') {
+      const id = window.BirdCommands ? BirdCommands.match(e) : null;
+      if (id) {
+        e.preventDefault();
+        if (!nativeOwns(id)) BirdCommands.run(id);
+        return;
       }
-      return;
+      if (cmd) return;
     }
-    if (cmd && (e.key === 'PageDown' || e.key === 'PageUp')) {
-      e.preventDefault();
-      if (state.pages.length > 1) {
-        gotoPage(state.activePage + (e.key === 'PageDown' ? 1 : -1));
-      }
-      return;
-    }
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (state.penActive) {
         e.preventDefault();
@@ -6100,6 +6432,8 @@ window.addEventListener('resize', resizeCanvas);
 /* ════════════════════════════════════════════════════════════
    API PUBLIQUE (intégration Astro / Rust / automatisation)
 ════════════════════════════════════════════════════════════ */
+let nativeInfo = null;
+
 window.Bird = {
   version: '2.0.0',
   get canvas() { return canvas; },
@@ -6113,6 +6447,15 @@ window.Bird = {
   },
   get widgets() { return widgetsApi; },
   get plugins() { return window.BirdPlugins || null; },
+  get native() { return nativeInfo; },
+  set native(v) { nativeInfo = v; },
+  /* Registre de commandes : même point d'entrée que le menu natif.
+     `Bird.commands.run('file.export')` fonctionne sur toutes les plateformes. */
+  commands: {
+    run: (id) => (window.BirdCommands ? BirdCommands.run(id) : false),
+    list: () => (window.BirdCommands ? BirdCommands.list() : []),
+    groups: () => (window.BirdCommands ? BirdCommands.groups() : [])
+  },
   document: {
     new: resetDocument,
     clear: clearAll,
