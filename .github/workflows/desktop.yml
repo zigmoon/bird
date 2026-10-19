@@ -38,6 +38,13 @@ jobs:
       - name: Installer
         working-directory: astro
         run: npm ci
+
+      # Avant de compiler quoi que ce soit : les invariants d'interface.
+      # Deux régressions invisibles sont déjà passées en production — une
+      # icône blanche sur fond blanc, un logo « white » en réalité sombre.
+      - name: Contrôles d'invariants UI
+        run: node scripts/check-ui.mjs
+
       - name: Compiler
         working-directory: astro
         run: npm run build

@@ -509,6 +509,31 @@ Two bugs worth remembering, both fixed and documented in the code:
   it as a synchronous factory pushed `undefined` into the canvas and broke layer
   rendering; batch duplication goes through `enlivenObjects`.
 
+### UI invariants, checked before every build
+
+`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes three
+regressions that already shipped, each invisible to the developer and obvious to
+the user:
+
+| Check | The bug it prevents |
+|---|---|
+| No literal `stroke`/`fill` colour in CSS | `.btn.is-on svg { stroke: #fff }` survived from the old dark active state; once the active state became light, the icons turned white on white |
+| A file named `*white*` must contain white | `bird-mark-white.svg` contained `#0C0C0F` — the exact colour of the splash panel behind it |
+| Every referenced asset must exist | A deployment package could omit `css/fonts/`; the `@font-face` rules then failed silently and the page fell back to a system font |
+
+A legitimate exception is written as `check-ui:allow <reason>` on the same line.
+
+### Packaging for a static server
+
+```bash
+node scripts/pack-ftp.mjs          # → bird-ftp-<version>.zip
+```
+
+White-listed, not "everything except": only `index.html`, `manifest.webmanifest`,
+`llms.txt` and the `css/`, `js/`, `icons/`, `plugins/` trees go in, under a single
+`bird/` folder. Nothing from `astro/`, `rust/`, `desktop/`, `.git` or
+`node_modules` can leak to the server.
+
 ---
 
 ## Roadmap

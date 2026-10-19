@@ -296,11 +296,14 @@ button { cursor: pointer; }
 /* Boutons strictement carrés de la barre haute (ergonomie SuperPrint). */
 .btn-square { width: 30px; height: 30px; padding: 0; flex: 0 0 auto; }
 .btn-square > svg { width: 15px; height: 15px; }
-.btn.is-on {
-  background: #1a1a1a; border-color: #1a1a1a; color: #fff;
-}
-.btn.is-on:hover { background: #333; border-color: #333; }
-.btn.is-on svg { stroke: #fff; }
+/* État actif d'une bascule (Règles, Grille, Magnétisme).
+   La couleur de texte pilote l'icône via currentColor — surtout PAS de
+   `stroke` forcé ici : l'état actif a un fond clair, et un trait blanc sur
+   fond clair rend l'icône invisible. C'était un vestige de l'ancien état
+   actif sombre (fond #1a1a1a, icône blanche). Une seule règle, une seule
+   source de couleurs. */
+.btn.is-on { background: #eef4ff; border-color: #cfe1ff; color: #1677ff; }
+.btn.is-on:hover, .btn.is-on:active { background: #e3edff; border-color: #cfe1ff; }
 .btn-primary {
   background: #1a1a1a; color: #fff; border-color: #1a1a1a;
   font-weight: 700; letter-spacing: 1.2px;
@@ -654,9 +657,13 @@ kbd {
   display: inline-flex; align-items: center; justify-content: center;
   background: #fff; color: #555;
   border: 1px solid #d5d5d5; border-radius: 3px;
+  /* Le carré reste neutre, seule la barre « supprimer » est rouge : deux
+     tons assumés, donc la couleur du trait ne peut pas venir de currentColor.
+     Elle vit ici, en un seul endroit, plutôt que dans la règle du tracé. */
+  --none-accent: #d92727;
 }
 .appearance-none svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.25; }
-.appearance-none svg path { stroke: #d92727; stroke-width: 1.7; }
+.appearance-none svg path { stroke: var(--none-accent); stroke-width: 1.7; }
 .appearance-none:hover { background: #f5f5f5; border-color: #a8a8a8; color: #1a1a1a; }
 .appearance-none.on { background: #fff0f0; border-color: #d92727; color: #a81919; }
 
@@ -908,7 +915,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .drop-inner svg {
   width: 40px; height: 40px;
-  stroke: #1a1a1a; fill: none;
+  stroke: currentColor; fill: none;
   stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
   margin-bottom: 12px;
 }
@@ -1520,9 +1527,9 @@ input[type="range"]::-webkit-slider-thumb {
 .symbol-row .symbol-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-inline { font-size: 9.5px; color: #aaa; padding: 4px 2px; }
 
-/* Marqueur d'outil actif dans la barre haute */
-.btn-square.is-on { background: #eef4ff; border-color: #cfe1ff; color: #1677ff; }
-.btn-square.is-on:hover { background: #e3edff; }
+/* Marqueur d'outil actif : défini une seule fois avec `.btn.is-on` plus haut.
+   Ne PAS le redéfinir ici — deux règles concurrentes pour un même état,
+   c'est exactement ce qui avait laissé survivre un `stroke` blanc. */
 
 /* ═══════════════════════════════════════════════════════════════
    RESPONSIVE : le widget zoom ne doit jamais passer sous la barre

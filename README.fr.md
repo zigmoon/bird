@@ -530,6 +530,29 @@ npx serve .          # http://localhost:3000
 La sauvegarde locale est déclenchée 1,2 s après chaque modification, et à la fermeture.
 Les bibliothèques PDF/EPS ne sont téléchargées qu’au premier import ou export concerné.
 Les préférences d’interface (widgets détachés, plug-ins actifs, réglages de plug-ins) vivent dans `localStorage` et n’entrent jamais dans le fichier projet.
+### Invariants d’interface, vérifiés avant chaque build
+
+`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode trois
+régressions déjà livrées, invisibles côté code et évidentes côté utilisateur :
+
+| Contrôle | Le bug qu’il empêche |
+|---|---|
+| Aucune couleur `stroke`/`fill` littérale dans le CSS | `.btn.is-on svg { stroke: #fff }` avait survécu à l’ancien état actif sombre ; l’état étant devenu clair, les icônes étaient blanches sur fond blanc |
+| Un fichier nommé `*white*` doit contenir du blanc | `bird-mark-white.svg` contenait `#0C0C0F`, exactement la couleur du panneau du splash derrière lui |
+| Tout asset référencé doit exister | Un paquet de déploiement pouvait omettre `css/fonts/` ; les `@font-face` échouaient en silence et la page retombait sur une police système |
+
+Une exception légitime s’écrit `check-ui:allow <raison>` sur la même ligne.
+
+### Empaqueter pour un serveur statique
+
+```bash
+node scripts/pack-ftp.mjs          # → bird-ftp-<version>.zip
+```
+
+Liste blanche, pas « tout sauf » : seuls `index.html`, `manifest.webmanifest`,
+`llms.txt` et les arborescences `css/`, `js/`, `icons/`, `plugins/` entrent dans
+l’archive, sous un unique dossier `bird/`. Rien de `astro/`, `rust/`, `desktop/`,
+`.git` ou `node_modules` ne peut fuiter sur le serveur.
 
 ---
 
