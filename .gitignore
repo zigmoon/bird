@@ -23,3 +23,7 @@ astro/src/generated/
 *.eps
 *.svg.out
 !icons/*.svg
+
+# Paquet FTP : artefact régénérable, pas une source. Il vit en local pour
+# être déposé sur le serveur, il n'a rien à faire dans l'historique Git.
+bird-ftp-*.zip
