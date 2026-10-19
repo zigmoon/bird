@@ -654,6 +654,35 @@ déposer, quelle que soit la cible. Avec `--flat`, l’archive **est** la racine
 site (`index.html` à côté de `css/`, `js/`, `icons/`), ce qu’attend un panneau
 d’hébergement qui décompresse une archive au premier niveau.
 
+### Héberger dans un sous-dossier
+
+Bird fonctionne tel quel à l’adresse `https://exemple.com/bird/` : toutes les
+références sont relatives (`css/…`, `js/…`, `icons/…`, `manifest.webmanifest`),
+il n’y a aucun chemin absolu dans le balisage, la feuille de style ou le
+JavaScript, et la version autonome n’enregistre aucun service worker — aucun
+scope ne peut donc s’échapper du dossier. Le plug-in livré est résolu depuis
+l’URL de `js/plugins.js`, pas depuis un chemin figé.
+
+Deux points à vérifier côté serveur :
+
+* **Le slash final compte.** `/bird` doit rediriger vers `/bird/`, sinon le
+  navigateur résout `css/style.css` par rapport au dossier parent et la page
+  s’affiche sans style. Apache (`mod_dir`) et nginx le font par défaut pour un
+  vrai dossier — ne désactivez pas ce comportement.
+* **`.htaccess` est un fichier caché.** La plupart des clients FTP le masquent :
+  vérifiez qu’il a bien été envoyé. Il est facultatif (types MIME, gzip, durées
+  de cache) et sans effet sur nginx.
+
+Servez en **HTTPS** : l’API presse-papiers et l’accès direct aux fichiers
+exigent un contexte sécurisé. Sans lui, les téléchargements simples continuent
+de fonctionner, mais « copier le rendu » et l’écriture directe sur le disque non.
+
+`localStorage` et IndexedDB sont liés à l’**origine**, pas au chemin : une autre
+application à `exemple.com/bird2/` les partage. Toutes les clés écrites par Bird
+sont préfixées (`bird.lang`, `bird.theme`, `bird_doc_v2`, `bird-db`,
+`bird-fonts`, `bird_plugins_*`) : la cohabitation est donc sûre tant que l’autre
+application n’utilise pas le même préfixe.
+
 ---
 
 ## Feuille de route

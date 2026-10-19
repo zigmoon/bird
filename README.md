@@ -629,6 +629,35 @@ drop whatever the target. With `--flat` the archive *is* the site root
 (`index.html` next to `css/`, `js/`, `icons/`), which is what a hosting panel
 that unpacks an archive at the first level expects.
 
+### Hosting in a subdirectory
+
+Bird runs unchanged at `https://example.com/bird/` — every reference is
+relative (`css/…`, `js/…`, `icons/…`, `manifest.webmanifest`), there is no
+leading slash anywhere in the markup, the stylesheet or the JavaScript, and the
+standalone build registers no service worker, so no scope can escape the folder.
+The bundled plug-in is resolved from the URL of `js/plugins.js`, not from a
+fixed path.
+
+Two things to check on the server:
+
+* **The trailing slash matters.** `/bird` must redirect to `/bird/`; otherwise
+  the browser resolves `css/style.css` against the parent and the page loads
+  unstyled. Apache `mod_dir` and nginx both do this by default for a real
+  directory — do not disable it.
+* **`.htaccess` is a dotfile.** Most FTP clients hide it; make sure it was
+  uploaded. It is optional (MIME types, gzip, cache lifetimes) and has no effect
+  on nginx.
+
+Serve over **HTTPS**: the clipboard API and the File System Access API require a
+secure context. Without it, plain downloads still work, but "copy the render"
+and direct disk access do not.
+
+`localStorage` and IndexedDB are scoped to the **origin**, not the path: another
+application at `example.com/bird2/` shares them. Every key Bird writes is
+prefixed (`bird.lang`, `bird.theme`, `bird_doc_v2`, `bird-db`, `bird-fonts`,
+`bird_plugins_*`), so coexistence is safe as long as the other app does not use
+the same prefix.
+
 ---
 
 ## Roadmap
