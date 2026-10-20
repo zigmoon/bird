@@ -23,11 +23,38 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────────────────────────────
+  # 0. Pré-vol : quelques secondes, avant les runners coûteux.
+  #
+  # Un numéro de version remplacé à l'aveugle dans Cargo.lock a déjà fait
+  # échouer les QUATRE builds de bureau, chacun après plusieurs minutes de
+  # compilation, avec un message noyé dans la sortie de Tauri. La résolution
+  # des dépendances détecte la même faute en quelques secondes, sans compiler.
+  # ─────────────────────────────────────────────────────────────
+  preflight:
+    name: Pré-vol (versions, icônes, dépendances)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.0'
+
+      # Le tag doit dire la même chose que l'application, sinon la release
+      # s'appelle v2.5.0 et contient des installeurs 2.4.0.
+      - name: Versions, tag, icônes et résolution des dépendances
+        run: node scripts/check-desktop.mjs
+
+  # ─────────────────────────────────────────────────────────────
   # 1. Le moteur web doit compiler avant qu'on emballe quoi que ce soit.
   # ─────────────────────────────────────────────────────────────
   web:
     name: Site Astro
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -73,30 +100,34 @@ jobs:
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      # Version épinglée : `-D warnings` sous un stable flottant casse le build
+      # le jour où une nouvelle lint paraît, sans qu'une seule ligne ait changé.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: '1.99.0'
           components: clippy
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: rust
       - name: Tests
         working-directory: rust
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Clippy
         working-directory: rust
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: La CLI fonctionne
         working-directory: rust
         shell: bash
         run: |
-          cargo run -q -p bird-cli -- inspect examples/sample.plume
-          cargo run -q -p bird-cli -- to-svg examples/sample.plume out.svg
+          cargo run -q --locked -p bird-cli -- inspect examples/sample.plume
+          cargo run -q --locked -p bird-cli -- to-svg examples/sample.plume out.svg
           test -s out.svg
 
   # ─────────────────────────────────────────────────────────────
@@ -105,6 +136,10 @@ jobs:
   desktop:
     name: Bureau — ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
+    # Le pré-vol a déjà validé versions, icônes et résolution : inutile de
+    # lancer quatre compilations de dix minutes pour redécouvrir la même faute.
+    needs: [preflight]
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -138,8 +173,9 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: '1.99.0'
           targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
@@ -162,6 +198,22 @@ jobs:
       - name: Compiler l'application et ses installeurs
         working-directory: desktop
         run: npx tauri build --target ${{ matrix.target }}
+
+      # La compilation ne doit pas réécrire les fichiers de verrouillage : une
+      # version inventée dans Cargo.lock était silencieusement corrigée dans le
+      # runner, et le binaire partait avec d'autres dépendances que celles du
+      # dépôt. On ne passe pas `--locked` à `tauri build` (npx mange le `--`) :
+      # on vérifie le résultat, ce qui est aussi sûr et ne dépend d'aucun
+      # transfert d'arguments.
+      - name: La compilation n'a pas modifié les lockfiles
+        shell: bash
+        run: |
+          set -e
+          if ! git diff --exit-code -- desktop/src-tauri/Cargo.lock rust/Cargo.lock; then
+            echo "::error::la compilation a réécrit un fichier de verrouillage — le committer"
+            exit 1
+          fi
+          echo "Lockfiles inchangés."
 
       - name: Vérifier que les installeurs existent
         shell: bash
@@ -192,9 +244,13 @@ jobs:
   # 4. Release : les installeurs attachés au tag.
   # ─────────────────────────────────────────────────────────────
   release:
-    needs: [desktop]
+    # Les trois portes doivent être vertes. `needs: [desktop]` seul a déjà
+    # publié une release alors que les invariants d'interface échouaient :
+    # les installeurs partaient avec une interface cassée.
+    needs: [preflight, web, rust, desktop]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@v4
         with:

@@ -436,10 +436,14 @@ bird/
 │   ├── plugins.js              plug-in host, registry, settings drawer
 │   └── app.js                  application: tools, history, layers, export
 ├── plugins/motif-vectoriel.plugin.js
+├── scripts/
+│   ├── check-ui.mjs            UI invariants (design, i18n, versions, defaults)
+│   ├── check-desktop.mjs       desktop pre-flight: versions, tag, icons, cargo --locked
+│   └── pack-ftp.mjs            white-listed static package (--flat for a site root)
 ├── astro/                      Astro version (marketing, docs, PWA, API routes)
 ├── rust/                       bird-core + bird-cli (no Node required)
 ├── desktop/                    Tauri 2 shell → macOS, Windows, Linux
-└── .github/workflows/          multi-OS desktop build
+└── .github/workflows/          pre-flight, web, Rust, 4 desktop targets, release
 ```
 
 ### JavaScript API
@@ -569,6 +573,42 @@ move the failure to the user. Consequences, in full:
 
 `.plume` and `.bird` files are registered as document types, so double-clicking a
 project opens Bird.
+
+### Before the runners start
+
+```bash
+node scripts/check-desktop.mjs
+```
+
+Ten seconds, no compilation. A version number replaced blindly across
+`Cargo.lock` once put six third-party crates (`icu_properties`, `icu_collections`…)
+at a version that does not exist: **all four desktop builds** failed in the same
+way, each after several minutes, with the reason buried in Tauri's output.
+
+That check therefore runs as its own job (`pré-vol`) **before** anything is
+built, and it:
+
+* requires **one version everywhere** — `js/app.js` is the reference, compared
+  against `rust/Cargo.toml` (workspace), `desktop/src-tauri/Cargo.toml` and
+  `tauri.conf.json`;
+* requires the **tag to match** that version, so a release can never be named
+  `v2.5.0` while its installers say `2.4.0`;
+* checks the **icon files** `tauri build` and `tauri icon` need exist;
+* runs **`cargo metadata --locked`** on both workspaces — dependency resolution
+  without a single line compiled. `--locked` also means a stale `Cargo.lock`
+  fails here instead of being silently repaired inside the runner.
+
+Two other rules keep the pipeline honest:
+
+* the desktop build is pinned **not** to invalidate `Cargo.lock` — a step after
+  compilation fails if `git diff` shows the lockfiles changed;
+* `release` needs **every** job (`preflight`, `web`, `rust`, `desktop`). It used
+  to need only `desktop`, and one run published a release while the UI
+  invariants were failing.
+
+The Rust toolchain is pinned (`1.99.0`) rather than `stable`: `clippy -D
+warnings` on a floating stable turns the build red the day a new lint ships,
+with no code change at all.
 
 ---
 

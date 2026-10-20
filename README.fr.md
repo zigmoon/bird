@@ -468,8 +468,13 @@ bird/
 │   └── app.js                 application : outils, historique, calques, export
 ├── plugins/
 │   └── motif-vectoriel.plugin.js   plug-in livré (textures sans raccord)
+├── scripts/
+│   ├── check-ui.mjs           invariants d’interface (DA, i18n, versions, défauts)
+│   ├── check-desktop.mjs      pré-vol bureau : versions, tag, icônes, cargo --locked
+│   └── pack-ftp.mjs           paquet statique en liste blanche (--flat = racine)
 ├── astro/                     version Astro (pages, SEO, PWA, API)
 ├── rust/                      moteur Rust : CLI, serveur local, conversion
+├── desktop/                   coquille Tauri 2 → macOS, Windows, Linux
 ├── llms.txt                   manifeste lisible par les LLM
 └── manifest.webmanifest       PWA
 ```
@@ -633,6 +638,45 @@ déplacer l’échec chez l’utilisateur. Conséquences, en entier :
   complémentaires* → *Exécuter quand même*.
 - **Linux** : l’AppImage peut nécessiter FUSE 2 (`libfuse2`) sur les
   distributions récentes ; le `.deb` et le `.rpm` n’ont pas cette contrainte.
+
+### Avant que les runners ne démarrent
+
+```bash
+node scripts/check-desktop.mjs
+```
+
+Dix secondes, aucune compilation. Un numéro de version remplacé à l’aveugle dans
+`Cargo.lock` a déjà mis six crates tiers (`icu_properties`, `icu_collections`…)
+à une version qui n’existe pas : les **quatre builds de bureau** ont échoué de
+la même façon, chacun après plusieurs minutes, avec la raison noyée dans la
+sortie de Tauri.
+
+Ce contrôle tourne donc dans son propre job (`pré-vol`) **avant** toute
+compilation, et il exige :
+
+* **une seule version partout** — `js/app.js` fait référence, comparé à
+  `rust/Cargo.toml` (workspace), `desktop/src-tauri/Cargo.toml` et
+  `tauri.conf.json` ;
+* **le tag égal à cette version**, pour qu’une release ne s’appelle jamais
+  `v2.5.0` avec des installeurs en `2.4.0` ;
+* la présence des **fichiers d’icônes** dont `tauri build` et `tauri icon` ont
+  besoin ;
+* **`cargo metadata --locked`** sur les deux espaces de travail — la résolution
+  des dépendances sans compiler une ligne. `--locked` fait aussi échouer un
+  `Cargo.lock` périmé ici, au lieu de le laisser se réparer en silence dans le
+  runner.
+
+Deux autres règles tiennent le pipeline honnête :
+
+* une étape après compilation échoue si `git diff` montre qu’un fichier de
+  verrouillage a été réécrit ;
+* `release` dépend de **tous** les jobs (`preflight`, `web`, `rust`,
+  `desktop`). Il ne dépendait que de `desktop`, et un run a publié une release
+  alors que les invariants d’interface échouaient.
+
+La chaîne Rust est épinglée (`1.99.0`) plutôt que `stable` : `clippy -D
+warnings` sur un stable flottant rend le build rouge le jour où une nouvelle
+lint paraît, sans qu’une seule ligne ait changé.
 
 ---
 
