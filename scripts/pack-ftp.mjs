@@ -11,7 +11,7 @@
  * du dossier de staging (`stage/bird/…`), ce qui produit une arborescence
  * fausse sur le serveur. Ici le nom de chaque entrée est décidé.
  *
- * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.5.0.zip] [--flat]
+ * Usage : node scripts/pack-ftp.mjs [--out bird-ftp-v2.6.0.zip] [--flat]
  *
  * --flat dépose les fichiers à la RACINE de l'archive au lieu de les ranger
  * dans un dossier `bird/` : le zip se décompresse alors directement dans le
@@ -163,7 +163,7 @@ function listDir(dir) {
 }
 
 const argOut = process.argv.indexOf('--out');
-const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.5.0.zip';
+const outName = argOut > -1 ? process.argv[argOut + 1] : 'bird-ftp-v2.6.0.zip';
 const outPath = path.isAbsolute(outName) ? outName : path.join(root, outName);
 
 const files = [];

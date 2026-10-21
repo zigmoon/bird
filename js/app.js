@@ -13,7 +13,7 @@ const LS_META_KEY = 'bird_meta_v3';
 const IDB_KEY = 'current';
 const LEGACY_LS_KEY = 'plume_doc_v1';
 const PROJECT_VERSION = 3;
-const SERIALIZED_PROPS = ['_plumeData', 'name', 'birdId', 'birdLocked', 'birdHidden', '_birdShape'];
+const SERIALIZED_PROPS = ['_plumeData', 'name', 'birdId', 'birdLocked', 'birdHidden', '_birdShape', '_birdTextShape'];
 const AI_SESSION_KEY = 'bird_openrouter_key';
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 64;
@@ -113,6 +113,17 @@ const state = {
   // plans de travail (pages)
   pages: [],                  // [{ id, name, w, h, color, json }]
   activePage: 0,
+  /* Documents ouverts (onglets). Chaque entrée porte ses propres plans ;
+     seul le document actif a ses pages chargées dans `state.pages`. */
+  docs: [],
+  activeDoc: 0,
+  /* Le cadre du plan est-il « sélectionné » (clic sur son numéro) ? C'est une
+     sélection d'un autre genre que celle des objets : elle ne porte pas de
+     poignées et ne se déplace pas, elle ouvre le format du plan. */
+  artboardSelected: false,
+  /* Vrai pendant un export : les annotations de l'interface (numéro de plan,
+     cadre de sélection) ne doivent pas se retrouver dans le fichier produit. */
+  exporting: false,
 
   // export
   exportFormat: 'svg',
@@ -139,6 +150,7 @@ let canvas = null;
 let penPreview = [];   // objets temporaires plume
 let penPreviewPath = null;
 let clipboardObject = null;
+let clipboardArtboard = null;   // { name, w, h, color, json } — copie d'un plan
 
 /* ────────────────────────────────────────────────────────────
    RÉFÉRENCES DOM
@@ -283,10 +295,14 @@ function init() {
   bindGuides();
   bindViewToggles();
   bindPages();
+  bindDocuments();
+  bindTextShape();
   bindVectorTools();
   observeSidebar();
   mountShellExtras();
   canvas.on('after:render', scheduleOverlayUpdate);
+  // Annotation du plan : peinte après les objets, jamais dans un export.
+  canvas.on('after:render', (opt) => paintArtboardAnnotation(opt && opt.ctx));
   scheduleOverlayUpdate();
 
   // Splash screen : se referme après le chargement
@@ -294,7 +310,10 @@ function init() {
   // Pop-in de démarrage (Reprendre / Ouvrir / Nouveau) après le splash
   showStartupGate();
 
-  loadDoc().then(() => {
+  loadDoc().then((loaded) => {
+    // Un document doit exister dès le premier pixel : sans lui, la barre
+    // d'onglets serait vide et la première sauvegarde n'aurait aucun plan.
+    if (!loaded) ensureInitialDocument();
     updateUI();
     updateZoomUI();
     fitView(); // vue d'ensemble comme SuperPrint à l'ouverture
@@ -304,6 +323,30 @@ function init() {
       fitView();
     });
   });
+}
+
+/* Document de départ, quand aucune session n'est trouvée. Il rend la barre
+   d'onglets utilisable immédiatement et donne une cible à l'enregistrement. */
+function ensureInitialDocument() {
+  if (state.docs.length) return;
+  const page = createPage('Plan 1', state.artboardW, state.artboardH, state.artboardColor);
+  state.pages = [page];
+  state.activePage = 0;
+  pageHistory.clear();
+  state.docs = [{
+    id: newDocId(),
+    name: 'Sans titre 1',
+    pages: state.pages,
+    activePage: 0,
+    artboardW: state.artboardW,
+    artboardH: state.artboardH,
+    artboardColor: state.artboardColor,
+    view: null
+  }];
+  state.activeDoc = 0;
+  renderPages();
+  renderDocTabs();
+  syncArtboardReadout();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -419,7 +462,7 @@ function showStartupGate() {
           if (resumeB) resumeB.disabled = false;
           openB.disabled = false; newB.disabled = false;
         }, 240);
-        if (choice === 'new') resetDocument();
+        if (choice === 'new') newDocumentFromDialog();
       }, 60);
     };
 
@@ -451,7 +494,21 @@ function resetDocument() {
   // Un nouveau document repart d'un seul plan, au format courant.
   state.pages = [{ id: newPageId(), name: 'Plan 1', w: state.artboardW, h: state.artboardH, color: state.artboardColor, json: null }];
   state.activePage = 0;
+  // Une seule session de travail : un document, un onglet.
+  state.docs = [{
+    id: newDocId(),
+    name: 'Sans titre 1',
+    pages: state.pages,
+    activePage: 0,
+    artboardW: state.artboardW,
+    artboardH: state.artboardH,
+    artboardColor: state.artboardColor,
+    view: null
+  }];
+  state.activeDoc = 0;
   pageHistory.clear();
+  state.artboardSelected = false;
+  document.body.classList.remove('artboard-selected');
   state.dirty = false;
   setDirty(false);
   projectPath = null;
@@ -459,6 +516,7 @@ function resetDocument() {
   renderGuides(true);
   renderLayers();
   renderPages();
+  renderDocTabs();
   updateUI();
   toast('Nouveau document');
 }
@@ -658,6 +716,50 @@ function setTool(tool) {
 function bindCanvas() {
   canvas.upperCanvasEl.addEventListener('contextmenu', openCanvasContextMenu);
 
+  /* ── Numéro du plan de travail : clic = sélection du plan ──
+     En phase de CAPTURE, avant Fabric : un clic sur le badge ne doit pas
+     amorcer un rectangle de sélection sur la scène vide. Le badge et le cadre
+     vivent hors du modèle d'objets — ils ne sont donc ni sérialisés ni
+     exportés, et il faut les tester ici.
+
+     Le cadre ne l'emporte que s'il n'y a AUCUN objet sous le curseur : un
+     objet qui déborde du plan reste toujours cliquable, sinon le bord du
+     plan volerait le clic sur les 7 px de tolérance. */
+  canvas.upperCanvasEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || state.spaceDown || state.penActive || state.panning) return;
+    const where = artboardHitTest(e);
+    if (!where) {
+      if (state.artboardSelected && state.tool === 'select') selectArtboard(false);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    selectArtboard(true);
+  }, true);
+
+  /* ── Option + glisser : dupliquer la sélection ──
+     Le clonage doit avoir lieu AVANT que Fabric n'installe sa transformation,
+     sinon c'est l'original qui se déplace et le clone reste sur place. On
+     écoute donc en phase de CAPTURE sur la couche haute : à cet instant, le
+     `_currentTransform` de Fabric n'existe pas encore.
+
+     Le clone est ajouté au-dessus de l'original, sans décalage. Fabric
+     cherche ensuite la cible sous le curseur de haut en bas : il trouve le
+     clone — c'est donc lui qui suit la souris, et l'original ne bouge pas.
+     Aucune interception du glisser n'est nécessaire, ce qui évite de
+     réimplémenter le déplacement, la rotation et le magnétisme. */
+  canvas.upperCanvasEl.addEventListener('mousedown', (e) => {
+    if (!e.altKey || e.button !== 0) return;
+    if (state.tool !== 'select' || state.spaceDown || state.penActive || state.panning) return;
+    const target = canvas.findTarget(e, false);
+    if (!target || !target.selectable) return;
+    const active = canvas.getActiveObject();
+    const members = (active && active.type === 'activeSelection' && active.getObjects().includes(target))
+      ? active.getObjects().slice()
+      : [target];
+    altDragDuplicate(members);
+  }, true);
+
   // ── Zoom molette (zoom vers le curseur) ──
   canvas.on('mouse:wheel', (opt) => {
     const e = opt.e;
@@ -753,15 +855,23 @@ function openCanvasContextMenu(event, directTarget) {
   const editItem = els.canvasContextMenu.querySelector('[data-context-action="edit-path"]');
   const groupItem = els.canvasContextMenu.querySelector('[data-context-action="group"]');
   const ungroupItem = els.canvasContextMenu.querySelector('[data-context-action="ungroup"]');
+  const insideItem = els.canvasContextMenu.querySelector('[data-context-action="text-inside"]');
+  const aroundItem = els.canvasContextMenu.querySelector('[data-context-action="text-around"]');
   const sepItem = els.canvasContextMenu.querySelector('.canvas-context-menu-sep');
   const frontItem = els.canvasContextMenu.querySelector('[data-context-action="bring-front"]');
   const backItem = els.canvasContextMenu.querySelector('[data-context-action="send-back"]');
   editItem.hidden = active.type !== 'path';
   groupItem.hidden = !canGroupSelection(active);
   ungroupItem.hidden = !canUngroupSelection(active);
+  // Le texte dans/auteur de la forme demande UNE forme : une sélection
+  // multiple n'a pas de silhouette unique.
+  const canText = !!(window.BirdTextShape && BirdTextShape.canApply(active));
+  if (insideItem) insideItem.hidden = !canText;
+  if (aroundItem) aroundItem.hidden = !canText;
   frontItem.hidden = false;
   backItem.hidden = false;
   sepItem.hidden = editItem.hidden && groupItem.hidden && ungroupItem.hidden;
+  syncContextMenuShortcuts();
 
   els.canvasContextMenu.hidden = false;
   const rect = els.canvasContextMenu.getBoundingClientRect();
@@ -863,6 +973,14 @@ function beginPenEdit(path) {
 
 function onSelection() {
   const obj = canvas.getActiveObject();
+  // Sélectionner un objet et un plan sont deux choses exclusives : l'une
+  // efface l'autre, sinon le clavier ne sait plus sur quoi il agit.
+  if (obj && state.artboardSelected) {
+    state.artboardSelected = false;
+    document.body.classList.remove('artboard-selected');
+    syncArtboardReadout();
+    canvas.requestRenderAll();
+  }
   updateGroupingUI();
   if (!obj) {
     els.textProps.hidden = true;
@@ -2477,9 +2595,244 @@ function closeCanvasContextMenu() {
   if (els.canvasContextMenu) els.canvasContextMenu.hidden = true;
 }
 
+/* Les raccourcis affichés dans le menu contextuel viennent du registre, pas
+   d'une chaîne figée : sur macOS ce sont ⌘⇧G et ⌘⇧U, ailleurs Ctrl+Shift+G
+   et Ctrl+Shift+U. Une étiquette écrite à la main finit toujours par mentir. */
+function syncContextMenuShortcuts() {
+  if (!els.canvasContextMenu || !window.BirdCommands) return;
+  const set = (name, combo) => {
+    const node = els.canvasContextMenu.querySelector('[data-shortcut="' + name + '"]');
+    if (node) node.textContent = BirdCommands.labelFor(combo);
+  };
+  set('group', 'Mod+Shift+G');
+  set('ungroup', 'Mod+Shift+U');
+}
+
+/* ════════════════════════════════════════════════════════════
+   TEXTE DANS / AUTOUR D'UNE FORME
+   ────────────────────────────────────────────────────────────
+   Le texte produit est un objet à part entière — il est donc exporté et
+   sérialisé normalement — mais il n'est NI sélectionnable NI déplaçable :
+   il est piloté par la forme. C'est ce qui évite d'avoir à synchroniser en
+   permanence deux positions (le défaut classique de cette fonction : on
+   déplace la forme, le texte reste). Pour le modifier, on rouvre le menu de
+   la forme.
+════════════════════════════════════════════════════════════ */
+const textShapeState = {
+  shape: null,
+  textObj: null,
+  id: null,
+  mode: 'inside',
+  dirty: false,
+  timer: null,
+  before: null      // { text, mode, fontSize, padding, lineHeight, fill }
+};
+
+function linkedTextOf(shape) {
+  if (!shape || !shape._birdTextShape || !shape._birdTextShape.id) return null;
+  const id = shape._birdTextShape.id;
+  return canvas.getObjects().find((o) => o !== shape && o._birdTextShape && o._birdTextShape.id === id) || null;
+}
+
+function newTextShapeId() {
+  return 'ts' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+}
+
+function readTextShapeCfg() {
+  return {
+    mode: textShapeState.mode,
+    text: $('textShapeText').value,
+    fontSize: Number($('textShapeSize').value) || 24,
+    padding: Number($('textShapePad').value) || 0,
+    lineHeight: Number($('textShapeLine').value) || 1.25,
+    fill: $('textShapeFill').value || '#1a1a1a',
+    fontFamily: 'IBM Plex Mono',
+    align: 'center'
+  };
+}
+
+function openTextShape(shape, mode) {
+  if (!shape) return;
+  if (!window.BirdTextShape || !BirdTextShape.canApply(shape)) {
+    toast('Cette forme ne peut pas recevoir de texte', true);
+    return;
+  }
+  const modal = $('textShapeModal');
+  if (!modal) return;
+
+  const existing = linkedTextOf(shape);
+  const cfg = (existing && existing._birdTextShape && existing._birdTextShape.cfg) || {};
+
+  textShapeState.shape = shape;
+  textShapeState.textObj = existing;
+  textShapeState.id = (shape._birdTextShape && shape._birdTextShape.id) || newTextShapeId();
+  textShapeState.mode = mode || (existing ? existing._birdTextShape.mode : 'inside');
+
+  $('textShapeText').value = existing ? existing.text : 'Texte';
+  $('textShapeSize').value = Math.round(cfg.fontSize || Math.min(48, Math.max(12, (shape.getBoundingRect(true, true).height || 120) / 6)));
+  $('textShapePad').value = cfg.padding != null ? cfg.padding : 8;
+  $('textShapeLine').value = cfg.lineHeight || 1.25;
+  $('textShapeFill').value = colorInputValue(cfg.fill || shape.fill, '#1a1a1a');
+  textShapeState.before = JSON.parse(JSON.stringify(readTextShapeCfg()));
+  syncTextShapeMode();
+
+  beginTxn();
+  modal.hidden = false;
+  scheduleTextShapePreview();
+  requestAnimationFrame(() => { const t = $('textShapeText'); if (t) { t.focus(); t.select(); } });
+}
+
+function syncTextShapeMode() {
+  document.querySelectorAll('#textShapeMode button').forEach((b) => {
+    const on = b.dataset.mode === textShapeState.mode;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  const title = $('textShapeTitle');
+  if (title) title.textContent = textShapeState.mode === 'around' ? 'Texte autour de la forme' : 'Texte dans la forme';
+  const hint = $('textShapeHint');
+  if (hint) {
+    hint.textContent = textShapeState.mode === 'around'
+      ? 'Le texte court le long du contour extérieur de la forme.'
+      : 'Le texte épouse la silhouette de la forme, ligne par ligne.';
+  }
+}
+
+function scheduleTextShapePreview() {
+  clearTimeout(textShapeState.timer);
+  textShapeState.timer = setTimeout(applyTextShapePreview, 180);
+}
+
+function applyTextShapePreview() {
+  const shape = textShapeState.shape;
+  if (!shape || !canvas.getObjects().includes(shape)) return;
+
+  const cfg = readTextShapeCfg();
+  if (textShapeState.textObj && canvas.getObjects().includes(textShapeState.textObj)) {
+    canvas.remove(textShapeState.textObj);
+  }
+  textShapeState.textObj = null;
+
+  shape._birdTextShape = { id: textShapeState.id };
+  if (!cfg.text.trim()) {
+    canvas.requestRenderAll();
+    renderLayers();
+    textShapeState.dirty = true;
+    return;
+  }
+
+  const obj = BirdTextShape.create(shape, cfg);
+  if (!obj) {
+    canvas.requestRenderAll();
+    return;
+  }
+  obj._birdTextShape = { id: textShapeState.id, mode: cfg.mode, cfg: cfg };
+  // Le texte suit la forme, il ne se manipule pas : deux objets liés dont on
+  // peut déplacer l'un sans l'autre est le piège de cette fonction.
+  obj.set({ selectable: false, evented: false, hasBorders: false, hasControls: false, hoverCursor: 'default' });
+  canvas.add(obj);
+  canvas.bringToFront(obj);
+  textShapeState.textObj = obj;
+  textShapeState.dirty = true;
+  canvas.requestRenderAll();
+  renderLayers();
+}
+
+function closeTextShape(save) {
+  clearTimeout(textShapeState.timer);
+  const modal = $('textShapeModal');
+  if (save) {
+    applyTextShapePreview();
+    if (textShapeState.dirty) {
+      commitUndo('Texte dans la forme');
+      setDirty(true);
+      toast(textShapeState.mode === 'around' ? 'Texte autour de la forme' : 'Texte dans la forme');
+    } else {
+      cancelTxn();
+    }
+  } else {
+    // Annuler : on remet exactement ce qui existait avant l'ouverture.
+    if (textShapeState.textObj && canvas.getObjects().includes(textShapeState.textObj)) {
+      canvas.remove(textShapeState.textObj);
+    }
+    const shape = textShapeState.shape;
+    if (shape && canvas.getObjects().includes(shape) && textShapeState.before) {
+      const obj = BirdTextShape.create(shape, textShapeState.before);
+      if (obj) {
+        obj._birdTextShape = { id: textShapeState.id, mode: textShapeState.before.mode, cfg: textShapeState.before };
+        obj.set({ selectable: false, evented: false, hasBorders: false, hasControls: false });
+        canvas.add(obj);
+        canvas.bringToFront(obj);
+      } else if (shape) {
+        shape._birdTextShape = undefined;
+      }
+    }
+    cancelTxn();
+    canvas.requestRenderAll();
+    renderLayers();
+  }
+  textShapeState.shape = null;
+  textShapeState.textObj = null;
+  textShapeState.before = null;
+  textShapeState.dirty = false;
+  if (modal) modal.hidden = true;
+}
+
+function deleteTextShape() {
+  const shape = textShapeState.shape;
+  const target = linkedTextOf(shape) || textShapeState.textObj;
+  if (target && canvas.getObjects().includes(target)) {
+    canvas.remove(target);
+    pushUndo('Texte supprimé');
+    setDirty(true);
+    toast('Texte retiré de la forme');
+  }
+  if (shape) shape._birdTextShape = undefined;
+  textShapeState.shape = null;
+  textShapeState.textObj = null;
+  textShapeState.dirty = false;
+  cancelTxn();
+  const modal = $('textShapeModal');
+  if (modal) modal.hidden = true;
+  canvas.requestRenderAll();
+  renderLayers();
+}
+
+function bindTextShape() {
+  const modal = $('textShapeModal');
+  if (!modal) return;
+  $('textShapeClose').addEventListener('click', () => closeTextShape(true));
+  $('textShapeCancel').addEventListener('click', () => closeTextShape(false));
+  $('textShapeApply').addEventListener('click', () => closeTextShape(true));
+  $('textShapeDelete').addEventListener('click', deleteTextShape);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeTextShape(true); });
+
+  document.querySelectorAll('#textShapeMode button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      textShapeState.mode = btn.dataset.mode === 'around' ? 'around' : 'inside';
+      syncTextShapeMode();
+      applyTextShapePreview();
+    });
+  });
+  ['textShapeText', 'textShapeSize', 'textShapePad', 'textShapeLine', 'textShapeFill'].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    const evt = el.tagName === 'TEXTAREA' ? 'input' : 'change';
+    el.addEventListener(evt, scheduleTextShapePreview);
+    if (evt === 'change' && el.type !== 'color') el.addEventListener('input', scheduleTextShapePreview);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (modal.hidden) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closeTextShape(false); }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); closeTextShape(true); }
+  }, true);
+}
+
 function bindGroupingControls() {
   els.btnGroup.addEventListener('click', groupSelection);
   els.btnUngroup.addEventListener('click', ungroupSelection);
+  syncContextMenuShortcuts();
   els.canvasContextMenu.addEventListener('click', event => {
     const item = event.target.closest('[data-context-action]');
     if (!item) return;
@@ -2489,6 +2842,8 @@ function bindGroupingControls() {
     else if (action === 'ungroup') ungroupSelection();
     else if (action === 'bring-front') zOrder('front');
     else if (action === 'send-back') zOrder('back');
+    else if (action === 'text-inside') openTextShape(canvas.getActiveObject(), 'inside');
+    else if (action === 'text-around') openTextShape(canvas.getActiveObject(), 'around');
     else if (action === 'edit-path') {
       const path = editablePenPath(canvas.getActiveObject());
       if (path) beginPenEdit(path);
@@ -3113,7 +3468,7 @@ function mountShellExtras() {
   const newBtn = $('btnNew');
   if (newBtn && !newBtn.dataset.bound) {
     newBtn.dataset.bound = '1';
-    newBtn.addEventListener('click', () => resetDocument());
+    newBtn.addEventListener('click', () => newDocumentFromDialog());
   }
   const brand = $('brandHome');
   // Le logo n'est plus une commande : plus de retour à la vue ajustée au clic.
@@ -3544,16 +3899,26 @@ function syncExportUI() {
   });
   const isVector = state.exportFormat === 'svg' || state.exportFormat === 'pdf' || state.exportFormat === 'pdfx';
   const isPrint = state.exportFormat === 'pdfx';
-  $('exportScaleField').hidden = isVector;
+  const multi = exportJobList().length > 1;
+  $('exportScaleField').hidden = isVector || multi;
   $('exportBgField').hidden = false;
   // Les réglages d'imprimerie n'apparaissent que pour le PDF/X.
   const printBox = $('exportPrint');
   if (printBox) printBox.hidden = !isPrint;
-  if ($('exportScopePages')) $('exportScopePages').disabled = state.pages.length < 2 || isPrint;
+  if ($('exportScopePages')) $('exportScopePages').disabled = isPrint;
   if (isPrint && state.exportScope === 'pages') {
     state.exportScope = 'document';
     $('exportScope').value = 'document';
   }
+
+  /* Le choix des plans n'apparaît que s'il y a de quoi choisir ; le choix
+     des documents seulement s'il y a plusieurs onglets. Un champ affiché mais
+     sans effet est pire que pas de champ du tout. */
+  const pickField = $('exportPickField');
+  if (pickField) pickField.hidden = state.exportScope !== 'pages';
+  const docsField = $('exportDocsField');
+  if (docsField) docsField.hidden = state.docs.length < 2;
+
   const bg = $('exportBackground');
   bg.querySelector('option[value="transparent"]').disabled = state.exportFormat === 'jpg';
   if (state.exportFormat === 'jpg') bg.value = 'white';
@@ -3565,11 +3930,12 @@ function syncExportUI() {
     jpg: 'JPG sans transparence : le fond est composité en blanc.',
     webp: 'WEBP : meilleur compromis poids/qualité pour le web.'
   };
-  $('exportNote').textContent = state.exportScope === 'pages'
+  const jobs = exportJobList();
+  $('exportNote').textContent = jobs.length > 1
     ? 'Chaque plan de travail devient une page du PDF, à son propre format. Le plus proche d’un document Illustrator multi-plans.'
     : (notes[state.exportFormat] || '');
-  $('exportSize').textContent = state.exportScope === 'pages'
-    ? state.pages.length + ' pages PDF'
+  $('exportSize').textContent = jobs.length > 1
+    ? jobs.length + ' pages PDF'
     : currentExportSize();
 }
 
@@ -3611,14 +3977,16 @@ function bindExportModal() {
   const open = () => {
     state.exportScope = canvas.getActiveObjects().length ? 'selection' : 'document';
     $('exportScope').value = state.exportScope;
-    // L'option multi-plans n'a de sens qu'avec au moins deux plans.
+    // L'option multi-plans n'a de sens qu'avec au moins deux plans, dans ce
+    // document ou dans un autre.
+    const totalPages = state.docs.reduce((sum, d, i) => sum + pageCountOfDocument(i), 0);
     const pagesOpt = $('exportScopePages');
     if (pagesOpt) {
-      pagesOpt.disabled = state.pages.length < 2;
-      pagesOpt.textContent = state.pages.length < 2
-        ? 'Tous les plans de travail (PDF)'
-        : 'Tous les plans de travail — ' + state.pages.length + ' pages (PDF)';
+      pagesOpt.disabled = totalPages < 2;
+      pagesOpt.textContent = 'Plans de travail choisis… (' + totalPages + ')';
     }
+    if ($('exportPagesPick') && !$('exportPagesPick').value) $('exportPagesPick').placeholder = 'tous';
+    if ($('exportDocs')) $('exportDocs').value = 'active';
     modal.hidden = false;
     syncExportUI();
   };
@@ -3633,12 +4001,32 @@ function bindExportModal() {
   });
   $('exportScope').addEventListener('change', () => {
     state.exportScope = $('exportScope').value;
-    // La portée « tous les plans » implique le PDF.
-    if (state.exportScope === 'pages' && state.exportFormat !== 'pdf') {
+    // Un choix de plans qui produirait une seule page n'a pas besoin du PDF.
+    if (state.exportScope === 'pages' && exportJobList().length > 1) {
       state.exportFormat = 'pdf';
     }
     syncExportUI();
   });
+  if ($('exportPagesPick')) {
+    $('exportPagesPick').addEventListener('input', () => {
+      const jobs = exportJobList();
+      if (jobs.length > 1) state.exportFormat = 'pdf';
+      syncExportUI();
+    });
+  }
+  if ($('exportDocs')) {
+    $('exportDocs').addEventListener('change', () => {
+      // « Tous les documents » n'a de sens qu'avec plusieurs plans : on
+      // bascule la portée plutôt que de laisser un réglage sans effet.
+      if ($('exportDocs').value === 'all' && state.exportScope !== 'pages') {
+        state.exportScope = 'pages';
+        $('exportScope').value = 'pages';
+      }
+      const jobs = exportJobList();
+      if (jobs.length > 1) state.exportFormat = 'pdf';
+      syncExportUI();
+    });
+  }
   $('exportScale').addEventListener('change', syncExportUI);
   $('exportBackground').addEventListener('change', syncExportUI);
 
@@ -4442,6 +4830,51 @@ function duplicate() {
   });
 }
 
+/* Option + glisser (voir le listener de capture dans bindCanvas).
+   Le clone naît à la position EXACTE de l'original : c'est le glisser qui
+   l'écarte. Un décalage à la création ferait sauter la sélection au moment
+   où la souris est pressée. */
+function altDragDuplicate(sources) {
+  if (!sources.length) return;
+  beginTxn();
+  const made = [];
+  let pending = sources.length;
+  const finish = () => {
+    // L'ordre de `made` suit l'ordre d'arrivée des clones ; celui du canvas
+    // doit rester celui des sources pour ne pas inverser l'empilement.
+    made.sort((a, b) => sources.indexOf(a.source) - sources.indexOf(b.source));
+    const clones = made.map((m) => m.clone);
+    if (clones.length === 1) {
+      canvas.discardActiveObject();
+      canvas.add(clones[0]);
+      canvas.setActiveObject(clones[0]);
+    } else {
+      canvas.discardActiveObject();
+      clones.forEach((c) => canvas.add(c));
+      canvas.setActiveObject(new fabric.ActiveSelection(clones, { canvas }));
+    }
+    commitUndo('Dupliquer');
+    setDirty(true);
+    refreshActiveSelection();
+    canvas.requestRenderAll();
+  };
+  sources.forEach((source) => {
+    source.clone((clone) => {
+      clone.set({
+        left: source.left,
+        top: source.top,
+        evented: true,
+        selectable: true,
+        _plumeData: source._plumeData ? JSON.parse(JSON.stringify(source._plumeData)) : undefined
+      });
+      clone.setCoords();
+      made.push({ source, clone });
+      pending -= 1;
+      if (pending === 0) finish();
+    });
+  });
+}
+
 function selectAll() {
   const objects = canvas.getObjects().filter(object => object.selectable && !object.__penTemp);
   if (!objects.length) return;
@@ -4450,6 +4883,23 @@ function selectAll() {
 }
 
 function copySelection() {
+  /* Un plan de travail sélectionné se copie comme un objet : c'est ce qui
+     permet de le dupliquer au clavier. Le presse-papiers garde une copie
+     PROFONDE du JSON, pas la référence de la page — sinon coller modifierait
+     l'original. */
+  if (state.artboardSelected && !canvas.getActiveObject()) {
+    const page = activePage();
+    if (!page) return;
+    clipboardArtboard = {
+      name: page.name,
+      w: state.artboardW,
+      h: state.artboardH,
+      color: state.artboardColor,
+      json: JSON.parse(JSON.stringify(canvasJSON()))
+    };
+    toast('Plan « ' + page.name + ' » copié');
+    return;
+  }
   const active = canvas.getActiveObject();
   if (!active) return;
   active.clone(clone => { clipboardObject = clone; toast('Copié'); });
@@ -4457,6 +4907,11 @@ function copySelection() {
 }
 
 function cutSelection() {
+  if (state.artboardSelected && !canvas.getActiveObject()) {
+    copySelection();
+    deleteSelection();
+    return;
+  }
   const active = canvas.getActiveObject();
   if (!active) return;
   active.clone(clone => {
@@ -4466,7 +4921,27 @@ function cutSelection() {
   });
 }
 
+/* Coller un plan : il s'insère APRÈS le plan courant et devient le plan
+   actif, comme un collage d'objet arrive devant. */
+async function pasteArtboard() {
+  const source = clipboardArtboard;
+  if (!source) return;
+  flushActivePage();
+  stashPageHistory();
+  const copy = createPage(source.name, source.w, source.h, source.color);
+  copy.json = JSON.parse(JSON.stringify(source.json));
+  const at = state.activePage + 1;
+  state.pages.splice(at, 0, copy);
+  await gotoPage(at, { force: true });
+  setDirty(true);
+  toast('Plan collé');
+}
+
 function pasteSelection(inPlace) {
+  if (state.artboardSelected && clipboardArtboard && !clipboardObject) {
+    pasteArtboard();
+    return;
+  }
   if (!clipboardObject) return;
   clipboardObject.clone(clone => {
     beginTxn(); // état AVANT l'ajout
@@ -4496,11 +4971,24 @@ function nudgeSelection(key, amount) {
 }
 
 function deleteSelection() {
+  if (state.artboardSelected && !canvas.getActiveObject()) {
+    // Supprimer un plan de travail est destructeur : deletePage demande déjà
+    // confirmation, et refuse de retirer le dernier plan.
+    deletePage(state.activePage);
+    return;
+  }
   const objects = canvas.getActiveObjects().slice();
   if (!objects.length) return;
   pushUndo('Supprimer'); // capture l'état AVANT la suppression
   canvas.discardActiveObject();
-  objects.forEach(object => canvas.remove(object));
+  objects.forEach(object => {
+    // Supprimer une forme emporte le texte qu'elle portait : le texte est
+    // piloté par la forme, le laisser seul donnerait un bloc orphelin
+    // impossible à repositionner.
+    const linked = linkedTextOf(object);
+    if (linked) canvas.remove(linked);
+    canvas.remove(object);
+  });
   setDirty(true);
   refreshActiveSelection();
 }
@@ -4669,6 +5157,7 @@ function setArtboardColor(color) {
   // on désactive backgroundColor pour éviter un double rect dans l'export.
   canvas.backgroundColor = '';
   canvas.requestRenderAll();
+  syncArtboardReadout();
   setDirty(true);
 }
 
@@ -4680,6 +5169,7 @@ function setArtboardSize(w, h) {
   canvas.__plume.artH = h;
   canvas.requestRenderAll();
   fitView(); // réajuste la vue sur le nouveau format
+  syncArtboardReadout();
   setDirty(true);
 }
 
@@ -4720,6 +5210,80 @@ function createPage(name, w, h, color) {
 
 function activePage() {
   return state.pages[state.activePage] || null;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLAN DE TRAVAIL — NUMÉRO ET SÉLECTION
+   ────────────────────────────────────────────────────────────
+   Le numéro du plan est peint après les objets, donc au-dessus, et
+   seulement à l'écran : il n'appartient pas au document. C'est une
+   ANNOTATION, pas un objet — rien ne doit la retrouver dans un export.
+════════════════════════════════════════════════════════════ */
+function artboardGeometry() {
+  const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    left: vpt[4],
+    top: vpt[5],
+    width: state.artboardW * vpt[0],
+    height: state.artboardH * vpt[3],
+    index: state.activePage,
+    count: state.pages.length,
+    selected: !!state.artboardSelected,
+    dpr: typeof canvas.getRetinaScaling === 'function' ? canvas.getRetinaScaling() : 1,
+    // Le cartouche s'inverse avec le thème : noir sur clair, clair sur sombre.
+    ink: dark ? '#f0f0f0' : '#1a1a1a',
+    paper: dark ? '#1a1a1a' : '#ffffff'
+  };
+}
+
+/* 'badge' | 'frame' | null — voir js/artboards.js pour la géométrie. */
+function artboardHitTest(domEvent) {
+  if (!window.BirdArtboards || state.tool !== 'select') return null;
+  const geo = artboardGeometry();
+  const p = canvasPointFromEvent(domEvent);
+  const where = BirdArtboards.hitTest(geo, p.x, p.y);
+  if (where === 'frame') {
+    // Un objet sous le curseur garde la priorité sur le bord du plan.
+    if (canvas.findTarget(domEvent, false)) return null;
+  }
+  return where;
+}
+
+function paintArtboardAnnotation(ctx) {
+  if (state.exporting || !window.BirdArtboards || !state.pages.length) return;
+  BirdArtboards.paint(ctx, artboardGeometry());
+}
+
+function selectArtboard(on) {
+  on = !!on;
+  const changed = state.artboardSelected !== on;
+  state.artboardSelected = on;
+  if (on) {
+    canvas.discardActiveObject();
+    refreshActiveSelection();
+    openRightPanel();
+    // Le format du plan se règle dans « Document » : on y amène l'utilisateur.
+    requestAnimationFrame(() => {
+      const section = document.querySelector('.props-section[data-section="document"]');
+      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+  document.body.classList.toggle('artboard-selected', on);
+  syncArtboardReadout();
+  if (changed) canvas.requestRenderAll();
+}
+
+/* Bandeau « Plan 2 / 3 · 800 × 600 » en tête du panneau Document : sans lui,
+   le format affiché ne dit pas de quel plan il parle. */
+function syncArtboardReadout() {
+  const box = $('artboardReadout');
+  if (!box) return;
+  const page = activePage();
+  const name = page ? page.name : '—';
+  box.textContent = state.artboardSelected
+    ? 'Plan « ' + name + ' » sélectionné · ' + Math.round(state.artboardW) + ' × ' + Math.round(state.artboardH) + ' px'
+    : 'Format du plan « ' + name + ' » · ' + Math.round(state.artboardW) + ' × ' + Math.round(state.artboardH) + ' px';
 }
 
 /* Écrit l'état du canvas dans le plan actif. */
@@ -4773,9 +5337,12 @@ async function loadPageIntoCanvas(index) {
   await loadJSON(page.json || { version: '5.1.0', objects: [], background: '' });
   page.json = null;                 // c'est de nouveau le plan vivant
   restorePageHistory(page.id);
+  state.artboardSelected = false;
+  document.body.classList.remove('artboard-selected');
   renderLayers();
   renderPages();
   updateUI();
+  syncArtboardReadout();
 }
 
 async function gotoPage(index, options) {
@@ -4971,11 +5538,14 @@ function renderPages() {
   const next = $('pageNext');
   if (prev) prev.disabled = state.activePage === 0;
   if (next) next.disabled = state.activePage >= state.pages.length - 1;
+  syncArtboardReadout();
 }
 
 function bindPages() {
   const add = $('pageAdd');
   if (add) add.addEventListener('click', () => addPage());
+  const topAdd = $('btnAddArtboard');
+  if (topAdd) topAdd.addEventListener('click', () => addPage());
   const dup = $('pageDuplicate');
   if (dup) dup.addEventListener('click', duplicatePage);
   const prev = $('pagePrev');
@@ -4993,6 +5563,352 @@ function bindPages() {
   renderPages();
 }
 
+
+
+/* ════════════════════════════════════════════════════════════
+   DOCUMENTS OUVERTS (onglets)
+   ────────────────────────────────────────────────────────────
+   Un onglet = un DOCUMENT ; un document contient ses propres PLANS DE
+   TRAVAIL. Un plan est au document ce que la page est au fichier ; un
+   document est au projet ce que le fichier est au bureau. Les deux niveaux
+   ne se mélangent pas : on ne peut pas copier un objet d'un onglet à
+   l'autre, mais on peut fermer un onglet sans perdre les autres.
+
+   Comme pour les plans, un seul document vit sur le canvas à la fois : les
+   autres sont conservés sérialisés. `state.docs[state.activeDoc]` décrit le
+   document ACTIF, et ses pages sont la MÊME référence que `state.pages`.
+   C'est ce qui évite de synchroniser deux copies à chaque trait de plume.
+
+   L'historique n'est pas dupliqué ici : il est déjà rangé par plan dans
+   `pageHistory`, et les identifiants de plan sont uniques entre documents.
+════════════════════════════════════════════════════════════ */
+let docSeq = 0;
+
+function newDocId() {
+  docSeq += 1;
+  return 'd' + Date.now().toString(36) + '-' + docSeq;
+}
+
+function createDocument(name, w, h, color) {
+  return {
+    id: newDocId(),
+    name: name || nextDocumentName(),
+    pages: [{
+      id: newPageId(),
+      name: 'Plan 1',
+      w: w,
+      h: h,
+      color: color,
+      json: null
+    }],
+    activePage: 0,
+    artboardW: w,
+    artboardH: h,
+    artboardColor: color,
+    view: null
+  };
+}
+
+/* Nom libre : deux onglets ne doivent jamais porter le même nom, sinon la
+   barre devient inutilisable et « Fermer “Sans titre 2” » ne dit plus lequel. */
+function nextDocumentName() {
+  const taken = new Set(state.docs.map((d) => d.name));
+  let n = state.docs.length + 1;
+  while (taken.has('Sans titre ' + n)) n += 1;
+  return 'Sans titre ' + n;
+}
+
+/* Recopie l'état vivant dans la fiche du document actif. À appeler AVANT
+   toute bascule : c'est le seul moment où les deux représentations divergent. */
+function flushActiveDocument() {
+  flushActivePage();
+  stashPageHistory();
+  const doc = state.docs[state.activeDoc];
+  if (!doc) return;
+  doc.pages = state.pages;
+  doc.activePage = state.activePage;
+  doc.artboardW = state.artboardW;
+  doc.artboardH = state.artboardH;
+  doc.artboardColor = state.artboardColor;
+  doc.view = {
+    showGrid: state.showGrid,
+    gridSize: state.gridSize,
+    showRulers: state.showRulers,
+    snapEnabled: state.snapEnabled,
+    guides: state.guides.map((g) => ({ axis: g.axis, pos: g.pos }))
+  };
+}
+
+async function installDocument(doc) {
+  state.pages = doc.pages && doc.pages.length ? doc.pages : [createPage('Plan 1', doc.artboardW, doc.artboardH, doc.artboardColor)];
+  state.activePage = Math.max(0, Math.min(state.pages.length - 1, doc.activePage || 0));
+  state.artboardW = doc.artboardW;
+  state.artboardH = doc.artboardH;
+  state.artboardColor = doc.artboardColor;
+  canvas.__plume.artW = state.artboardW;
+  canvas.__plume.artH = state.artboardH;
+  canvas.__plume.artColor = state.artboardColor;
+  canvas.backgroundColor = '';
+  if ($('artboardColor')) $('artboardColor').value = state.artboardColor === 'transparent' ? '#ffffff' : state.artboardColor;
+  if (doc.view) applyProjectView(doc.view);
+
+  const page = state.pages[state.activePage];
+  applyPageArtboard(page);
+  canvas.discardActiveObject();
+  await loadJSON(page.json || { version: '5.1.0', objects: [], background: '' });
+  page.json = null;
+  restorePageHistory(page.id);
+  state.artboardSelected = false;
+  document.body.classList.remove('artboard-selected');
+  renderLayers();
+  renderPages();
+  renderDocTabs();
+  updateUI();
+  syncArtboardReadout();
+  applyDocumentTitle(state.docs[state.activeDoc] ? state.docs[state.activeDoc].name : null);
+}
+
+async function switchDocument(index, opts) {
+  opts = opts || {};
+  index = Math.max(0, Math.min(state.docs.length - 1, index));
+  if (index === state.activeDoc && !opts.force) return;
+  if (index === state.activeDoc && opts.force) { renderDocTabs(); return; }
+
+  if (state.activeDoc >= 0 && state.docs[state.activeDoc]) flushActiveDocument();
+
+  // On termine proprement ce qui est en cours avant de changer de document.
+  if (state.penActive) endPen(true);
+  if (state.shapeObj) { cancelTxn(); state.shapeObj = null; state.shapeStart = null; }
+  cancelTxn();
+  flushPropChange();
+
+  state.activeDoc = index;
+  await installDocument(state.docs[index]);
+  if (!opts.keepView) requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+  if (!opts.silent) toast('Document « ' + state.docs[index].name + ' »');
+}
+
+async function addDocument(name, w, h, color) {
+  if (state.activeDoc >= 0 && state.docs[state.activeDoc]) flushActiveDocument();
+
+  /* « Nouveau document » sur une toile vierge ne doit pas empiler un onglet
+     vide de plus : on réutilise l'onglet courant. Deux onglets dont aucun ne
+     contient rien est un piège, pas une fonctionnalité. */
+  if (state.docs.length && documentIsPristine(state.activeDoc)) {
+    const doc = state.docs[state.activeDoc];
+    doc.name = name || ('Sans titre ' + (state.activeDoc + 1));
+    doc.artboardW = w; doc.artboardH = h; doc.artboardColor = color;
+    doc.pages = [{ id: newPageId(), name: 'Plan 1', w: w, h: h, color: color, json: null }];
+    doc.activePage = 0;
+    doc.view = null;
+    await installDocument(doc);
+    requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+    setDirty(true);
+    return doc;
+  }
+
+  const doc = createDocument(name, w, h, color);
+  state.docs.push(doc);
+  await switchDocument(state.docs.length - 1, { silent: true });
+  setDirty(true);
+  renderDocTabs();
+  return doc;
+}
+
+/* Vrai si ce document ne contient rien : un seul plan, aucun objet. */
+function documentIsPristine(index) {
+  const doc = state.docs[index];
+  if (!doc || !doc.pages || doc.pages.length !== 1) return false;
+  return countDocumentObjects(index) === 0;
+}
+
+async function closeDocument(index) {
+  index = index === undefined ? state.activeDoc : index;
+  const doc = state.docs[index];
+  if (!doc) return;
+
+  const count = countDocumentObjects(index);
+  if (count > 0 && !window.confirm('Fermer « ' + doc.name + ' » et ses ' + count + ' objet(s) ?')) {
+    return;
+  }
+  state.docs.splice(index, 1);
+  doc.pages.forEach((p) => pageHistory.delete(p.id));
+
+  if (!state.docs.length) {
+    // Plus aucun document : on en recrée un vide, l'éditeur ne peut pas
+    // exister sans cible.
+    const fresh = createDocument('Sans titre 1', state.artboardW || 800, state.artboardH || 600, state.artboardColor || '#ffffff');
+    state.docs.push(fresh);
+    state.activeDoc = 0;
+    await installDocument(fresh);
+  } else if (index < state.activeDoc) {
+    state.activeDoc -= 1;
+    renderDocTabs();
+  } else if (index === state.activeDoc) {
+    state.activeDoc = Math.min(state.activeDoc, state.docs.length - 1);
+    await installDocument(state.docs[state.activeDoc]);
+    requestAnimationFrame(() => { resizeCanvas(); fitView(); });
+  } else {
+    renderDocTabs();
+  }
+  setDirty(true);
+  toast('Document fermé');
+}
+
+function countDocumentObjects(index) {
+  const doc = state.docs[index];
+  if (!doc) return 0;
+  if (index === state.activeDoc) return canvas.getObjects().length;
+  return doc.pages.reduce((sum, p) => sum + (p.json && p.json.objects ? p.json.objects.length : 0), 0);
+}
+
+function renameDocument(index, name) {
+  const doc = state.docs[index];
+  if (!doc) return;
+  const clean = String(name || '').trim().slice(0, 60);
+  if (!clean) return;
+  doc.name = clean;
+  renderDocTabs();
+  if (index === state.activeDoc) applyDocumentTitle(clean);
+  setDirty(true);
+}
+
+function renderDocTabs() {
+  const list = $('docTabs');
+  if (!list) return;
+  list.innerHTML = '';
+  state.docs.forEach((doc, index) => {
+    const tab = document.createElement('div');
+    tab.className = 'doc-tab' + (index === state.activeDoc ? ' is-active' : '');
+    tab.dataset.index = String(index);
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(index === state.activeDoc));
+    tab.tabIndex = index === state.activeDoc ? 0 : -1;
+
+    const name = document.createElement('span');
+    name.className = 'doc-tab-name';
+    name.textContent = doc.name;
+    name.title = 'Double-clic pour renommer';
+    name.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      name.contentEditable = 'true';
+      name.focus();
+      const done = () => {
+        name.contentEditable = 'false';
+        renameDocument(index, name.textContent);
+      };
+      name.addEventListener('blur', done, { once: true });
+      name.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); name.blur(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); name.textContent = doc.name; name.blur(); }
+        ev.stopPropagation();
+      });
+    });
+
+    const meta = document.createElement('small');
+    meta.className = 'doc-tab-meta';
+    const pageCount = doc.pages ? doc.pages.length : 1;
+    meta.textContent = pageCount > 1 ? pageCount + ' plans' : '1 plan';
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'doc-tab-close';
+    close.title = 'Fermer ce document';
+    close.setAttribute('aria-label', 'Fermer ce document');
+    close.textContent = '×';
+    close.addEventListener('click', (e) => { e.stopPropagation(); closeDocument(index); });
+
+    tab.appendChild(name);
+    tab.appendChild(meta);
+    tab.appendChild(close);
+    tab.addEventListener('click', () => { if (index !== state.activeDoc) switchDocument(index); });
+    list.appendChild(tab);
+  });
+}
+
+/* ── Boîte « Nouveau document » ───────────────────────────── */
+let newDocumentResolver = null;
+
+function openNewDocumentDialog() {
+  const modal = $('newDocModal');
+  if (!modal) return Promise.resolve(null);
+  $('newDocW').value = state.artboardW || 800;
+  $('newDocH').value = state.artboardH || 600;
+  $('newDocBg').value = '#ffffff';
+  syncNewDocPresets();
+  syncNewDocReadout();
+  modal.hidden = false;
+  requestAnimationFrame(() => { const w = $('newDocW'); if (w) w.focus({ preventScroll: true }); });
+  return new Promise((resolve) => { newDocumentResolver = resolve; });
+}
+
+function closeNewDocumentDialog(result) {
+  const modal = $('newDocModal');
+  if (modal) modal.hidden = true;
+  const resolve = newDocumentResolver;
+  newDocumentResolver = null;
+  if (resolve) resolve(result || null);
+}
+
+function syncNewDocReadout() {
+  const w = Math.max(1, Math.min(20000, parseInt($('newDocW').value, 10) || 1));
+  const h = Math.max(1, Math.min(20000, parseInt($('newDocH').value, 10) || 1));
+  const out = $('newDocReadout');
+  if (out) {
+    const ratio = (w / h).toFixed(2);
+    out.textContent = w + ' × ' + h + ' px · ' + ratio + ':1';
+  }
+}
+
+/* Ouvre la boîte « Nouveau document » et crée l'onglet si l'utilisateur
+   valide. Un seul chemin pour le bouton de la barre d'onglets, ⌘N et le
+   pop-in de démarrage. */
+async function newDocumentFromDialog() {
+  const spec = await openNewDocumentDialog();
+  if (!spec) return null;
+  return addDocument(spec.name, spec.w, spec.h, spec.color);
+}
+
+function syncNewDocPresets() {
+  const w = parseInt($('newDocW').value, 10);
+  const h = parseInt($('newDocH').value, 10);
+  document.querySelectorAll('#newDocPresets .newdoc-preset').forEach((btn) => {
+    btn.classList.toggle('is-active', Number(btn.dataset.w) === w && Number(btn.dataset.h) === h);
+  });
+}
+
+function bindDocuments() {
+  const add = $('docTabAdd');
+  if (add) add.addEventListener('click', () => newDocumentFromDialog());
+
+  const modal = $('newDocModal');
+  if (modal) {
+    $('newDocClose').addEventListener('click', () => closeNewDocumentDialog(null));
+    $('newDocCancel').addEventListener('click', () => closeNewDocumentDialog(null));
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeNewDocumentDialog(null); });
+    document.querySelectorAll('#newDocPresets .newdoc-preset').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $('newDocW').value = btn.dataset.w;
+        $('newDocH').value = btn.dataset.h;
+        syncNewDocPresets();
+        syncNewDocReadout();
+      });
+    });
+    ['newDocW', 'newDocH'].forEach((id) => {
+      $(id).addEventListener('input', () => { syncNewDocPresets(); syncNewDocReadout(); });
+    });
+    $('newDocCreate').addEventListener('click', () => {
+      const w = Math.max(1, Math.min(20000, parseInt($('newDocW').value, 10) || 800));
+      const h = Math.max(1, Math.min(20000, parseInt($('newDocH').value, 10) || 600));
+      const color = $('newDocBg').value || '#ffffff';
+      closeNewDocumentDialog({ w: w, h: h, color: color, name: null });
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.hidden) { e.stopPropagation(); closeNewDocumentDialog(null); }
+    }, true);
+  }
+  renderDocTabs();
+}
 
 function setDirty(d) {
   state.dirty = d;
@@ -5048,7 +5964,7 @@ function saveDoc() {
 }
 
 function createProjectPayload() {
-  flushActivePage();
+  flushActiveDocument();
   const total = state.pages.reduce((sum, p, i) =>
     sum + (i === state.activePage ? canvas.getObjects().length
       : (p.json && p.json.objects ? p.json.objects.length : 0)), 0);
@@ -5057,15 +5973,22 @@ function createProjectPayload() {
     format: 'bird-vector-project',
     version: PROJECT_VERSION,
     artboard: { w: state.artboardW, h: state.artboardH, color: state.artboardColor },
-    pages: state.pages.map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      w: p.w,
-      h: p.h,
-      color: p.color,
-      json: i === state.activePage ? canvasJSON() : p.json
-    })),
+    pages: serializePages(activeDocRecord(), true),
     activePage: state.activePage,
+    /* Les onglets. Un lecteur qui ignore ce champ ouvre quand même le
+       document actif grâce aux champs ci-dessus : la compatibilité
+       ascendante ne coûte qu'un champ. */
+    documents: state.docs.map((doc, i) => ({
+      id: doc.id,
+      name: doc.name,
+      activePage: doc.activePage,
+      w: doc.artboardW,
+      h: doc.artboardH,
+      color: doc.artboardColor,
+      view: doc.view || null,
+      pages: serializePages(doc, i === state.activeDoc)
+    })),
+    activeDocument: state.activeDoc,
     objectCount: total,
     view: {
       showGrid: state.showGrid,
@@ -5079,6 +6002,27 @@ function createProjectPayload() {
     json: canvasJSON(),
     savedAt: Date.now()
   };
+}
+
+function activeDocRecord() {
+  return state.docs[state.activeDoc] || { pages: state.pages };
+}
+
+/* Le plan affiché est la vérité, pas sa copie sérialisée : on le relit donc
+   depuis le canvas au moment d'écrire, sinon une modification non encore
+   « flushée » manquerait au fichier. */
+function serializePages(doc, isActive) {
+  return (doc.pages || []).map((p, j) => {
+    const live = isActive && j === state.activePage;
+    return {
+      id: p.id,
+      name: p.name,
+      w: live ? state.artboardW : p.w,
+      h: live ? state.artboardH : p.h,
+      color: live ? state.artboardColor : p.color,
+      json: live ? canvasJSON() : p.json
+    };
+  });
 }
 
 async function loadDoc() {
@@ -5119,6 +6063,24 @@ function applyProjectPayload(payload) {
   }
   applyProjectView(payload.view);
 
+  // ── Multi-documents ──
+  if (payload.documents && payload.documents.length) {
+    state.docs = payload.documents.map((d, i) => ({
+      id: d.id || newDocId(),
+      name: d.name || 'Sans titre ' + (i + 1),
+      pages: d.pages,
+      activePage: Math.max(0, Math.min(d.pages.length - 1, d.activePage || 0)),
+      artboardW: d.w,
+      artboardH: d.h,
+      artboardColor: d.color,
+      view: d.view || null
+    }));
+    state.activeDoc = Math.max(0, Math.min(state.docs.length - 1, payload.activeDocument || 0));
+    pageHistory.clear();
+    installDocument(state.docs[state.activeDoc]);
+    return;
+  }
+
   if (payload.pages && payload.pages.length) {
     // Le plan actif est chargé sur le canvas, les autres restent sérialisés.
     const active = Math.max(0, Math.min(payload.pages.length - 1, payload.activePage || 0));
@@ -5137,8 +6099,21 @@ function applyProjectPayload(payload) {
     applyPageArtboard(page);
     loadJSON(payload.pages[active].json);
     resetStacks();
+    // Un projet mono-document devient le premier onglet.
+    state.docs = [{
+      id: newDocId(),
+      name: payload.name || 'Sans titre 1',
+      pages: pages,
+      activePage: active,
+      artboardW: state.artboardW,
+      artboardH: state.artboardH,
+      artboardColor: state.artboardColor,
+      view: payload.view || null
+    }];
+    state.activeDoc = 0;
     renderLayers();
     renderPages();
+    renderDocTabs();
     return;
   }
 
@@ -5154,8 +6129,20 @@ function applyProjectPayload(payload) {
   state.activePage = 0;
   pageHistory.clear();
   if (payload.json) loadJSON(payload.json);
+  state.docs = [{
+    id: newDocId(),
+    name: payload.name || 'Sans titre 1',
+    pages: state.pages,
+    activePage: 0,
+    artboardW: state.artboardW,
+    artboardH: state.artboardH,
+    artboardColor: state.artboardColor,
+    view: payload.view || null
+  }];
+  state.activeDoc = 0;
   renderLayers();
   renderPages();
+  renderDocTabs();
 }
 
 function applyProjectView(view) {
@@ -5209,13 +6196,49 @@ function normalizeProjectPayload(data) {
 
   return {
     version: Number(wrapped.version) || 0,
+    name: typeof wrapped.name === 'string' ? wrapped.name.slice(0, 60) : null,
     artboard,
     pages,
     activePage,
+    documents: normalizeDocuments(wrapped, artboard),
+    activeDocument: Math.max(0, Number(wrapped.activeDocument) || 0),
     view: wrapped.view || null,
     json: wrapped.json,
     savedAt: Number(wrapped.savedAt) || null
   };
+}
+
+/* Valide la liste des documents. Une entrée cassée est ignorée plutôt que de
+   faire échouer l'ouverture : un projet de dix onglets ne doit pas être perdu
+   parce qu'un seul a été tronqué. */
+function normalizeDocuments(wrapped, artboard) {
+  if (!Array.isArray(wrapped.documents) || !wrapped.documents.length) return null;
+  const out = [];
+  wrapped.documents.forEach((doc, i) => {
+    if (!doc || !Array.isArray(doc.pages) || !doc.pages.length) return;
+    const pages = doc.pages
+      .filter((p) => p && p.json && Array.isArray(p.json.objects))
+      .map((p, j) => ({
+        id: typeof p.id === 'string' && p.id ? p.id : null,
+        name: String(p.name || 'Plan ' + (j + 1)).slice(0, 60),
+        w: Math.min(50000, Math.max(1, Number(p.w) || Number(doc.w) || artboard.w)),
+        h: Math.min(50000, Math.max(1, Number(p.h) || Number(doc.h) || artboard.h)),
+        color: p.color === 'transparent' ? 'transparent' : (p.color || artboard.color),
+        json: p.json
+      }));
+    if (!pages.length) return;
+    out.push({
+      id: typeof doc.id === 'string' && doc.id ? doc.id : null,
+      name: String(doc.name || 'Sans titre ' + (i + 1)).slice(0, 60),
+      pages,
+      activePage: Math.max(0, Math.min(pages.length - 1, Number(doc.activePage) || 0)),
+      w: pages[0].w,
+      h: pages[0].h,
+      color: pages[0].color,
+      view: doc.view || null
+    });
+  });
+  return out.length ? out : null;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -5245,6 +6268,98 @@ function exportAs(format) {
     background,
     scale: (format === 'svg' || format === 'pdf') ? 1 : 2
   });
+}
+
+/* ════════════════════════════════════════════════════════════
+   CHOIX DES PLANS ET DES DOCUMENTS À EXPORTER
+   ────────────────────────────────────────────────────────────
+   « 1, 3-5 » suffit pour désigner des plans : c'est ce qu'un imprimeur
+   écrit dans un mail, et c'est plus rapide que douze cases à cocher quand
+   un document en compte trente. Une case vide veut dire « tous ».
+════════════════════════════════════════════════════════════ */
+function parsePlanList(text) {
+  const out = [];
+  const push = (n) => { const i = n - 1; if (i >= 0 && i < 9999 && out.indexOf(i) < 0) out.push(i); };
+  String(text == null ? '' : text).split(/[,;\/\s]+/).filter(Boolean).forEach((tok) => {
+    const range = tok.match(/^(\d+)\s*[-–à]\s*(\d+)$/i);
+    if (range) {
+      const a = Number(range[1]), b = Number(range[2]);
+      for (let n = Math.min(a, b); n <= Math.max(a, b); n++) push(n);
+    } else if (/^\d+$/.test(tok)) {
+      push(Number(tok));
+    }
+  });
+  return out.sort((a, b) => a - b);
+}
+
+function pageCountOfDocument(index) {
+  if (index === state.activeDoc) return state.pages.length;
+  const doc = state.docs[index];
+  return doc && doc.pages ? doc.pages.length : 0;
+}
+
+/* Liste des couples (document, plan) à produire. */
+function exportJobList(opts) {
+  opts = opts || {};
+  const scope = opts.scope || state.exportScope;
+  const pickNode = $('exportPagesPick');
+  const docsNode = $('exportDocs');
+  const allDocuments = state.docs.length > 1 &&
+    (opts.documents === 'all' || (!opts.documents && docsNode && docsNode.value === 'all'));
+
+  const docIndexes = allDocuments
+    ? state.docs.map((_, i) => i)
+    : [opts.documents != null && opts.documents !== 'all' ? Number(opts.documents) : state.activeDoc];
+
+  const picks = parsePlanList(opts.pages != null ? opts.pages : (pickNode ? pickNode.value : ''));
+  const jobs = [];
+  docIndexes.forEach((d) => {
+    const count = pageCountOfDocument(d);
+    if (!count) return;
+    let list;
+    if (scope === 'pages' && picks.length) {
+      list = picks.filter((i) => i < count);
+      if (!list.length) list = [0];       // « 9 » sur un document de 2 plans
+    } else {
+      list = [];
+      for (let i = 0; i < count; i++) list.push(i);
+    }
+    list.forEach((p) => jobs.push({ doc: d, page: p }));
+  });
+  return jobs;
+}
+
+/* Installe chaque couple (document, plan) le temps d'un rendu, puis remet
+   l'éditeur exactement où il était. C'est le seul moyen d'exporter un plan
+   qui n'est pas affiché sans perdre le travail en cours : `flushActiveDocument`
+   écrit d'abord l'état vivant dans sa fiche. */
+async function withArtboards(jobs, fn) {
+  const initDoc = state.activeDoc;
+  const initPage = state.activePage;
+  const savedVpt = canvas.viewportTransform.slice();
+  const savedActive = canvas.getActiveObject();
+  if (state.artboardSelected) selectArtboard(false);
+
+  flushActiveDocument();
+  canvas.discardActiveObject();
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+
+  try {
+    for (const job of jobs) {
+      if (job.doc !== state.activeDoc) await switchDocument(job.doc, { silent: true, keepView: true });
+      if (job.page !== state.activePage) await gotoPage(job.page, { silent: true, keepView: true });
+      await fn(job);
+    }
+  } finally {
+    if (state.activeDoc !== initDoc) await switchDocument(initDoc, { silent: true, keepView: true });
+    if (state.activePage !== initPage) await gotoPage(initPage, { silent: true, keepView: true });
+    canvas.setViewportTransform(savedVpt);
+    if (savedActive && canvas.getObjects().includes(savedActive)) {
+      try { canvas.setActiveObject(savedActive); } catch (e) { /* objet disparu entre-temps */ }
+    }
+    refreshActiveSelection();
+    canvas.requestRenderAll();
+  }
 }
 
 function exportBounds(scope) {
@@ -5333,13 +6448,24 @@ async function runExport(opts) {
   const download = exportWantsDownload(opts);
   const base = opts.filename || ('bird-' + timestamp());
 
-  // Export multi-plans : un seul PDF, une page par plan de travail.
-  if (scope === 'pages') {
-    if (format !== 'pdf') {
-      toast('L’export multi-plans produit un PDF', true);
-      return exportFailure(format, 'multi-page export only produces a PDF');
+  /* Choix des plans / documents.
+     Un seul plan à produire : on l'installe et on emprunte le chemin normal,
+     quel que soit le format — c'est le seul moyen de garder le PDF/X, le SVG
+     et le raster strictement identiques au cas « plan affiché ».
+     Plusieurs plans : le PDF multipage est le seul format qui les porte. */
+  if (scope === 'pages' || scope === 'documents' || opts.pages != null || opts.documents != null) {
+    const jobs = exportJobList(opts);
+    if (!jobs.length) {
+      toast('Aucun plan à exporter', true);
+      return exportFailure(format, 'no artboard selected');
     }
-    return await exportPagesPDF(opts, download, base);
+    if (jobs.length === 1) {
+      return await withArtboards(jobs, () => runExport(Object.assign({}, opts, { scope: 'document', pages: undefined, documents: undefined })));
+    }
+    if (format !== 'pdf') {
+      toast('Plusieurs plans : le fichier produit est un PDF', true);
+    }
+    return await exportArtboardsPDF(opts, download, base, jobs);
   }
 
   // PDF d'imprimerie : chemin entièrement séparé (CMJN, shadings, ICC).
@@ -5402,15 +6528,24 @@ async function runExport(opts) {
       ctx.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
       ctx.restore();
     };
-    const dataURL = canvas.toDataURL({
-      format: fmt,
-      quality: format === 'png' ? 1 : 0.92,
-      multiplier: effectiveScale,
-      left: bounds.left,
-      top: bounds.top,
-      width: bounds.width,
-      height: bounds.height
-    });
+    const dataURL = (function () {
+      // L'annotation du plan (numéro, cadre de sélection) est peinte par un
+      // écouteur after:render : sans ce verrou, elle entrerait dans le PNG.
+      state.exporting = true;
+      try {
+        return canvas.toDataURL({
+          format: fmt,
+          quality: format === 'png' ? 1 : 0.92,
+          multiplier: effectiveScale,
+          left: bounds.left,
+          top: bounds.top,
+          width: bounds.width,
+          height: bounds.height
+        });
+      } finally {
+        state.exporting = false;
+      }
+    })();
     if (!dataURL) throw new Error('Rendu impossible');
     const ext = format === 'jpg' ? '.jpg' : format === 'webp' ? '.webp' : '.png';
     const filename = base + ext;
@@ -5611,10 +6746,11 @@ async function rasterToPdfImage(obj, flipY) {
   return { width: w0, height: h0, data: data, matrix: matrix, opacity: obj.opacity };
 }
 
-/* ── PDF de tous les plans ──
-   On installe chaque plan sur le canvas, on en tire un SVG au format exact
-   du plan, puis on rend les pages dans un seul document jsPDF. */
-async function exportPagesPDF(opts, download, base) {
+/* ── PDF de plusieurs plans ──
+   `jobs` désigne la liste exacte des couples (document, plan) à produire.
+   On installe chacun sur le canvas, on en tire un SVG au format exact du
+   plan, puis on rend les pages dans un seul document jsPDF. */
+async function exportArtboardsPDF(opts, download, base, jobs) {
   opts = opts || {};
   if (download === undefined) download = exportWantsDownload(opts);
   if (base === undefined) base = opts.filename || ('bird-' + timestamp());
@@ -5622,38 +6758,27 @@ async function exportPagesPDF(opts, download, base) {
     toast('Moteur PDF indisponible', true);
     return exportFailure('pdf', 'PDF engine unavailable');
   }
-  if (!state.pages.length) return exportFailure('pdf', 'no artboard');
-  const initialPage = state.activePage;
-  const savedVpt = canvas.viewportTransform.slice();
-  const savedActive = canvas.getActiveObject();
+  if (!jobs || !jobs.length) return exportFailure('pdf', 'no artboard');
   const background = opts.background || 'artboard';
   const entries = [];
 
-  canvas.discardActiveObject();
-  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  toast('Composition du PDF (' + jobs.length + ' plan' + (jobs.length > 1 ? 's' : '') + ')…');
   try {
-    toast('Composition du PDF (' + state.pages.length + ' plans)…');
-    for (let i = 0; i < state.pages.length; i++) {
-      if (i !== state.activePage) await loadPageIntoCanvas(i);
+    await withArtboards(jobs, async () => {
       const bounds = exportBounds('document');
       const svg = buildSVGString(bounds.width, bounds.height, { bounds, background });
       entries.push({ svg, width: bounds.width, height: bounds.height });
-    }
+    });
   } catch (err) {
     console.error('[Bird export pages]', err);
     toast('Export des plans impossible : ' + (err.message || 'erreur'), true);
     return exportFailure('pdf', err.message || 'erreur');
-  } finally {
-    if (state.activePage !== initialPage) await loadPageIntoCanvas(initialPage);
-    canvas.setViewportTransform(savedVpt);
-    if (savedActive) { try { canvas.setActiveObject(savedActive); } catch (e) {} }
-    canvas.requestRenderAll();
   }
 
   try {
     const result = await BirdIO.svgPagesToPDF(entries, {
       title: opts.filename || 'Bird',
-      subject: state.pages.length + ' plan(s) de travail'
+      subject: entries.length + ' plan(s) de travail'
     });
     const filename = base + '-' + result.pages + 'plans.pdf';
     if (download) {
@@ -5946,7 +7071,7 @@ function defineCommands() {
   }
   C.defineAll([
     /* ── Fichier ── */
-    { id: 'file.new', group: 'Fichier', label: 'Nouveau document', keys: 'Mod+N', run: resetDocument },
+    { id: 'file.new', group: 'Fichier', label: 'Nouveau document', keys: 'Mod+N', run: newDocumentFromDialog },
     { id: 'file.open', group: 'Fichier', label: 'Ouvrir…', keys: 'Mod+O', run: openProject },
     { id: 'file.save', group: 'Fichier', label: 'Enregistrer', keys: 'Mod+S', run: () => saveFile() },
     { id: 'file.saveAs', group: 'Fichier', label: 'Enregistrer sous…', keys: 'Mod+Shift+S', run: () => saveFile({ forceDialog: true }) },
@@ -5954,6 +7079,7 @@ function defineCommands() {
     { id: 'file.export', group: 'Fichier', label: 'Exporter…', keys: 'Mod+E', run: () => { const b = $('btnExport'); if (b) b.click(); } },
     { id: 'file.exportPdfX', group: 'Fichier', label: 'Exporter en PDF/X-1a…', keys: [], run: () => { showExportPanel('pdfx'); } },
     { id: 'file.print', group: 'Fichier', label: 'Imprimer…', keys: 'Mod+P', run: printDocument },
+    { id: 'file.closeDocument', group: 'Fichier', label: 'Fermer le document', keys: 'Mod+W', run: () => closeDocument(state.activeDoc) },
 
     /* ── Édition ── */
     { id: 'edit.undo', group: 'Édition', label: 'Annuler', keys: 'Mod+Z', run: undo },
@@ -5969,8 +7095,12 @@ function defineCommands() {
     { id: 'edit.deselect', group: 'Édition', label: 'Désélectionner', keys: 'Mod+Shift+A', run: deselectAll },
 
     /* ── Objet (ordre, verrouillage, vectorisation) ── */
-    { id: 'object.group', group: 'Objet', label: 'Grouper', keys: 'Mod+G', run: groupSelection },
-    { id: 'object.ungroup', group: 'Objet', label: 'Dégrouper', keys: 'Mod+Shift+G', run: ungroupSelection },
+    /* Le groupage est sur ⌘⇧G et le dégroupage sur ⌘⇧U, comme demandé — et
+       non ⌘G / ⌘⇧G. ⌘G reste un alias de groupage : c'est le réflexe
+       Illustrator, et il ne coûte rien. En revanche ⌘⇧G ne peut plus
+       dégrouper, puisqu'il groupe : le dégroupage n'a qu'une touche. */
+    { id: 'object.group', group: 'Objet', label: 'Grouper', keys: ['Mod+Shift+G', 'Mod+G'], run: groupSelection },
+    { id: 'object.ungroup', group: 'Objet', label: 'Dégrouper', keys: 'Mod+Shift+U', run: ungroupSelection },
     { id: 'object.front', group: 'Objet', label: 'Premier plan', keys: 'Mod+Shift+]', run: () => zOrder('front') },
     { id: 'object.forward', group: 'Objet', label: 'Avancer d’un rang', keys: 'Mod+]', run: () => zOrder('forward') },
     { id: 'object.backward', group: 'Objet', label: 'Reculer d’un rang', keys: 'Mod+[', run: () => zOrder('backward') },
@@ -5987,12 +7117,19 @@ function defineCommands() {
     { id: 'text.bigger', group: 'Texte', label: 'Corps plus grand', keys: 'Mod+Shift+.', run: () => changeFontSize(2) },
     { id: 'text.smaller', group: 'Texte', label: 'Corps plus petit', keys: 'Mod+Shift+,', run: () => changeFontSize(-2) },
 
-    /* ── Affichage ── */
-    { id: 'view.zoomIn', group: 'Affichage', label: 'Zoom avant', keys: 'Mod+=', run: () => setZoom(state.zoom * 1.25) },
-    { id: 'view.zoomOut', group: 'Affichage', label: 'Zoom arrière', keys: 'Mod+-', run: () => setZoom(state.zoom / 1.25) },
-    { id: 'view.fit', group: 'Affichage', label: 'Ajuster à l’écran', keys: 'Mod+0', run: fitView },
-    { id: 'view.actual', group: 'Affichage', label: 'Taille réelle (100 %)', keys: 'Mod+1', run: () => setZoom(1) },
-    { id: 'view.selection', group: 'Affichage', label: 'Zoom sur la sélection', keys: ['Mod+Alt+0', 'Shift+2'], run: zoomToSelection },
+    /* ── Affichage ──
+       Le « + » du pavé numérique, comme Maj+= sur un clavier physique, produit
+       le caractère `+` : `commands.js` le ramène à la touche `=` (ALIASES), ce
+       qui fait correspondre ⌘⇧= et ⌘+ à la même commande. Deux formes
+       enregistrées suffisent donc — les doubler affichait le raccourci deux
+       fois dans le panneau « Raccourcis ». */
+    { id: 'view.zoomIn', group: 'Affichage', label: 'Zoom avant', keys: ['Mod+=', 'Mod+Shift+='], run: () => setZoom(state.zoom * 1.25) },
+    { id: 'view.zoomOut', group: 'Affichage', label: 'Zoom arrière', keys: ['Mod+-', 'Mod+Shift+-'], run: () => setZoom(state.zoom / 1.25) },
+    /* ⌘0 = 100 %, comme demandé. L'ajustement à l'écran garde ⌘⌥0 et Maj+1
+       (raccourci « nu », traité plus bas) : il ne perd pas sa touche. */
+    { id: 'view.actual', group: 'Affichage', label: 'Taille réelle (100 %)', keys: ['Mod+0', 'Mod+1'], run: () => setZoom(1) },
+    { id: 'view.fit', group: 'Affichage', label: 'Ajuster à l’écran', keys: 'Mod+Alt+0', run: fitView },
+    { id: 'view.selection', group: 'Affichage', label: 'Zoom sur la sélection', keys: 'Shift+2', run: zoomToSelection },
     { id: 'view.rulers', group: 'Affichage', label: 'Règles', keys: 'Mod+R', run: () => { setRulers(!state.showRulers); toast(state.showRulers ? 'Règles affichées' : 'Règles masquées'); } },
     { id: 'view.grid', group: 'Affichage', label: 'Grille', keys: 'Mod+\'', run: () => { setGrid(!state.showGrid); toast(state.showGrid ? 'Grille affichée' : 'Grille masquée'); } },
     { id: 'view.snap', group: 'Affichage', label: 'Magnétisme', keys: 'Mod+;', run: () => { setSnap(!state.snapEnabled); toast(state.snapEnabled ? 'Magnétisme activé' : 'Magnétisme désactivé'); } },
@@ -6002,6 +7139,13 @@ function defineCommands() {
     /* ── Plans de travail ── */
     { id: 'page.next', group: 'Plans de travail', label: 'Plan suivant', keys: 'Mod+PageDown', run: () => { if (state.pages.length > 1) gotoPage(state.activePage + 1); } },
     { id: 'page.prev', group: 'Plans de travail', label: 'Plan précédent', keys: 'Mod+PageUp', run: () => { if (state.pages.length > 1) gotoPage(state.activePage - 1); } },
+    { id: 'page.add', group: 'Plans de travail', label: 'Ajouter un plan de travail', keys: [], run: () => addPage() },
+    { id: 'page.duplicate', group: 'Plans de travail', label: 'Dupliquer le plan', keys: [], run: duplicatePage },
+    { id: 'page.select', group: 'Plans de travail', label: 'Sélectionner le plan de travail', keys: [], run: () => selectArtboard(true) },
+
+    /* ── Documents ── */
+    { id: 'doc.next', group: 'Documents', label: 'Document suivant', keys: 'Mod+Alt+PageDown', run: () => { if (state.docs.length > 1) switchDocument(state.activeDoc + 1); } },
+    { id: 'doc.prev', group: 'Documents', label: 'Document précédent', keys: 'Mod+Alt+PageUp', run: () => { if (state.docs.length > 1) switchDocument(state.activeDoc - 1); } },
 
     /* ── Aide ── */
     { id: 'help.shortcuts', group: 'Aide', label: 'Raccourcis clavier', keys: 'F1', run: openShortcuts },
@@ -6156,6 +7300,7 @@ function bindKeyboard() {
     }
     if (e.key === 'Escape') {
       if (!els.canvasContextMenu.hidden) { closeCanvasContextMenu(); return; }
+      if (state.artboardSelected) { selectArtboard(false); return; }
       canvas.discardActiveObject(); refreshActiveSelection(); updateGroupingUI(); return;
     }
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -6632,6 +7777,10 @@ function snapMovingObject(o) {
 
 /* ── Resize : adapter la taille du canvas à la scène ── */
 function resizeCanvas() {
+  // L'observateur de la scène ci-dessous est branché au chargement du script,
+  // donc AVANT que `init()` ne crée le canvas : sans cette garde, le premier
+  // rappel levait « Cannot read properties of null (reading setDimensions) ».
+  if (!canvas || !els.stage) return;
   const rect = els.stage.getBoundingClientRect();
   const pad = rulerOffset();
   // Les règles occupent une bande fixe : le canvas doit se réduire d'autant,
@@ -6672,7 +7821,7 @@ window.addEventListener('resize', resizeCanvas);
 let _stageSize = { w: 0, h: 0 };
 
 function syncStageSurface() {
-  if (!els.stage) return;
+  if (!els.stage || !canvas) return;
   const r = els.stage.getBoundingClientRect();
   const w = Math.round(r.width);
   const h = Math.round(r.height);
@@ -6703,7 +7852,7 @@ if (typeof ResizeObserver === 'function') {
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.5.0',
+  version: '2.6.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
@@ -6728,7 +7877,7 @@ window.Bird = {
     groups: () => (window.BirdCommands ? BirdCommands.groups() : [])
   },
   document: {
-    new: resetDocument,
+    new: newDocumentFromDialog,
     clear: clearAll,
     save: saveFile,
     open: (file, point) => importFile(file, point),

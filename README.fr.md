@@ -62,6 +62,17 @@ Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox
 - **Conversion forme → chemin** et **Pathfinder** conservent l’édition vectorielle.
 - **Images et vidéos** : import PNG/JPG/WebP/GIF/BMP/AVIF, vignette de vidéo WebM/MP4.
 
+### Texte dans la forme, texte autour de la forme
+
+Clic droit sur une forme → **Écrire dans la forme** ou **Écrire autour de la forme**. Deux techniques réellement différentes, parce que l’une ne couvre pas l’autre :
+
+- **Dedans** — le texte épouse la *silhouette*. La forme est rastérisée hors écran, une transformée de distance (chamfer) donne la distance au bord vide de chaque pixel, et la largeur utilisable est lue rangée par rangée. Chaque ligne est donc aussi large que la forme l’est réellement à cette hauteur : une phrase tapée dans une ellipse remplit l’ellipse et s’arrête, au lieu d’être rognée à un rectangle. C’est le « texte curviligne » d’InDesign, et le seul moyen d’écrire lisiblement dans une étoile.
+- **Autour** — le texte court le long du contour : un tracé fermé décalé vers l’extérieur est construit (intersection d’arêtes pour un polygone, ellipse agrandie sinon) et confié à `fabric.Text`, qui pose des glyphes le long d’un chemin depuis la 5.1.
+
+Le texte produit est un **objet à part entière** : enregistré dans le document, présent dans tous les exports. Il n’est en revanche ni sélectionnable ni déplaçable — il est piloté par la forme. C’est volontaire : deux objets liés qu’on peut écarter à la souris sont le bug classique de cette fonction (on déplace la forme, le texte reste). Déplacez la forme, le texte suit ; modifiez le texte par le menu de la forme.
+
+Si la silhouette ne peut pas contenir le texte au corps demandé, le corps est **réduit** jusqu’à ce que tout tienne, avec un plancher à 6 px. Perdre silencieusement la fin d’une phrase — ce que fait un découpage glouton naïf — est pire qu’une police plus petite : l’utilisateur voit la moitié de son texte sans comprendre pourquoi.
+
 ### Organisation et précision
 - **Panneau Calques** : liste des objets, sélection, renommage, visibilité, verrouillage, ordre.
 - **Règles H/V** avec graduations dynamiques et **repères** (glisser depuis une règle, déplacer, double-clic pour supprimer).
@@ -274,11 +285,17 @@ Les pages importées sont ajoutées à la suite des plans existants : rien n’e
 
 Un document contient plusieurs plans de travail, chacun avec son format, son fond et son contenu.
 
+- **Deux boutons dans la barre haute** : `+` crée un *document*, le `+` dans un carré crée un *plan de travail*.
+- **Un numéro est peint à côté du cadre en pointillé.** C’est une annotation, pas un objet : elle est dessinée sur le contexte du canvas après les objets, donc absente de tout SVG, de tout PDF, et l’export raster la verrouille explicitement (`state.exporting`). Le numéro se place *en dehors* du plan pour ne jamais couvrir le dessin.
+- **Clic sur le numéro** — ou sur le cadre — pour sélectionner le plan : le cadre passe en plein, reçoit des équerres, et le panneau de droite s’ouvre sur *Document* pour changer le format immédiatement.
+- **`Ctrl/⌘ + C` puis `V`** copie et colle un plan : la copie s’insère juste après le plan courant et devient active. `Suppr` le supprime (avec confirmation).
 - **Panneau *Plans de travail*** : liste numérotée, nom éditable (double-clic), dimensions, nombre d’objets, monter/descendre, supprimer (confirmation si le plan n’est pas vide).
 - **Sélecteur flottant** en bas du plan de travail, visible dès deux plans : `‹ Plan › ` + compteur, cliquable pour ouvrir le panneau.
 - **Raccourcis** `Ctrl+Page↑` / `Ctrl+Page↓`.
 - **Historique isolé par plan** : annuler sur le plan A ne touche pas le plan B. Les piles sont mémorisées au changement de plan.
 - **Persistance** : le projet `.plume` enregistre tous les plans (`pages[]` + `activePage`). Un ancien projet mono-plan s’ouvre comme un document à un seul plan.
+
+Les deux jetons du numéro s’échangent en thème sombre : un cartouche noir sur un canevas sombre n’existerait pas.
 
 ```js
 Bird.pages.list()                  // [{ index, id, name, width, height, active }]
@@ -291,14 +308,38 @@ Bird.pages.remove(2)
 Bird.pages.move(3, -1)
 ```
 
+## Documents — un onglet par document
+
+Bird ne se limite pas à un document. Chaque **onglet** sous la barre haute est un document entier, avec ses propres plans de travail, son format et son historique.
+
+- **`+` dans la barre d’onglets** — ou `Ctrl/⌘ + N` — ouvre la boîte *Nouveau document* : six formats prédéfinis, largeur et hauteur libres, fond blanc / transparent / noir.
+- **Double-clic sur un onglet** pour le renommer. `×` le ferme (confirmation s’il contient quelque chose). `Ctrl/⌘ + W` ferme, `Ctrl/⌘ + Alt + Page↑/↓` passe d’un document à l’autre.
+- **Créer un document sur une toile vierge réutilise l’onglet courant** au lieu d’empiler un onglet vide à côté d’un autre onglet vide.
+- Le projet `.plume` gagne `documents[]` + `activeDocument`. Un lecteur qui ignore ces champs ouvre quand même le document actif par les anciennes clés `pages[]` + `json` : **les anciens projets s’ouvrent à l’identique, et les nouveaux se dégradent proprement**.
+
 ## Export
 
 - **SVG** : document ou sélection, fond plan de travail / transparent / blanc.
 - **PDF vectoriel** : via `svg2pdf` + jsPDF, compatible Illustrator et imprimeurs.
-- **PDF multi-plans** : portée *Tous les plans de travail* → un PDF, une page par plan, chacune à son format.
+- **PDF multi-plans** : portée *Plans de travail choisis…* → un PDF, une page par plan, chacune à son format.
 - **PNG** transparent, **JPG** fond blanc, **WEBP**, avec échelle 1× à 4×.
 - **Copie dans le presse-papiers** (SVG ou image).
 - **Projet `.plume`** : JSON versionné, migration automatique des anciens projets.
+
+### Choisir les plans et les documents
+
+La boîte d’export sait ce que contient le document :
+
+- **Portée** — le plan affiché · la sélection · *plans de travail choisis*.
+- **Plans (1, 3-5)** — champ libre ; vide veut dire « tous ». Virgules et plages, comme on l’écrit dans un mail à un imprimeur. Le relevé de taille se met à jour en direct : on lit `2 pages PDF` avant de cliquer sur Exporter.
+- **Documents** — *document actif* ou *tous les documents*, affiché seulement s’il y en a plusieurs.
+
+Un seul plan → le fichier est exactement ce que produit le format choisi (SVG, PNG, PDF/X-1a…). Plusieurs plans → **un PDF multipage, une page par plan, à son propre format**. C’est une contrainte, pas un choix : aucun PNG ne contient douze plans.
+
+```js
+await Bird.export({ format: 'pdf', scope: 'pages', pages: '1, 3-5' });
+await Bird.export({ format: 'pdf', scope: 'pages', documents: 'all' });
+```
 
 > PDF : les polices non standard sont ramenées à Helvetica / Times / Courier. Pour une fidélité typographique parfaite, exportez en PNG ou installez la police dans le système.
 
@@ -328,18 +369,39 @@ registre de commandes** (`js/commands.js`) : elle ne peut pas diverger du code.
 | `Ctrl+Maj+P` / `Ctrl+E` / `Ctrl+P` | Importer / Exporter / Imprimer |
 | `Ctrl+Z` / `Ctrl+Maj+Z` / `Ctrl+Y` | Annuler / Rétablir |
 | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` / `Ctrl+Maj+V` | Couper / Copier / Coller / Coller sur place |
+| `Alt` + glisser | Dupliquer la sélection en la déplaçant |
 | `Ctrl+A` / `Ctrl+Maj+A` / `Ctrl+D` | Tout sélectionner / Désélectionner / Dupliquer |
-| `Ctrl+G` / `Ctrl+Maj+G` | Grouper / Dégrouper |
+| `Ctrl+Maj+G` (ou `Ctrl+G`) / `Ctrl+Maj+U` | Grouper / Dégrouper |
 | `Ctrl+]` / `Ctrl+[` / `Ctrl+Maj+]` / `Ctrl+Maj+[` | Avancer / Reculer / Premier plan / Arrière-plan |
 | `Ctrl+2` / `Ctrl+Alt+2` / `Ctrl+3` / `Ctrl+Alt+3` | Verrouiller / Tout déverrouiller / Masquer / Tout afficher |
 | `Ctrl+Maj+O` | Contour de trait |
 | `Ctrl+Maj+.` / `Ctrl+Maj+,` | Corps de texte + / − |
-| `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` | Ajuster / 100 % / Zoom avant / Zoom arrière |
-| `Maj+1` / `Maj+2` | Ajuster à l’écran / Zoom sur la sélection |
+| `Ctrl+=` / `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom avant / Zoom avant / Zoom arrière / **100 %** |
+| `Ctrl+Alt+0` / `Maj+2` | Ajuster à l’écran / Zoom sur la sélection |
 | `Ctrl+R` / `Ctrl+'` / `Ctrl+;` | Règles / Grille / Magnétisme |
 | `Ctrl+K` / `Ctrl+,` | Plug-ins / Préférences |
 | `Ctrl+Page↑` / `Ctrl+Page↓` | Plan de travail précédent / suivant |
+| `Ctrl+Alt+Page↑` / `Ctrl+Alt+Page↓` | Document précédent / suivant |
+| `Ctrl+N` / `Ctrl+W` | Nouveau document / Fermer le document |
 | `F1` / `F11` | Raccourcis / Plein écran |
+| `Suppr` | Supprimer |
+| `Flèches` / `Maj+Flèches` | Déplacer de 1 px / 10 px |
+| `Échap` / `Entrée` | Terminer / annuler un tracé (ou `Échap` pendant un glissement de repère) |
+
+Le groupage est sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>G</kbd> et le dégroupage
+sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>U</kbd>. <kbd>Ctrl</kbd>+<kbd>G</kbd>
+groupe toujours — c’est le réflexe Illustrator et il ne coûte rien — mais
+<kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>G</kbd> ne peut plus dégrouper, puisqu’il
+groupe désormais. Le dégroupage n’a donc qu’une touche.
+
+Deux détails mesurés plutôt que supposés :
+
+- **`Ctrl+0` est 100 %**, et non « ajuster », comme demandé. L’ajustement est
+  passé sur `Ctrl+Alt+0`.
+- **`Ctrl++` a besoin de sa propre inscription.** Sur un clavier physique, `+`
+  s’obtient par `Maj+=` : l’événement porte donc `shiftKey` *et* le caractère
+  `+`. Le registre ramène maintenant `+` sur la touche `=`, sans quoi le zoom
+  avant par la touche `+` ne faisait rien (vérifié : le zoom ne bougeait pas).
 | `Suppr` | Supprimer |
 | `Flèches` / `Maj+Flèches` | Déplacer de 1 px / 10 px |
 | `Échap` / `Entrée` | Terminer / annuler un tracé (ou `Échap` pendant un glissement de repère) |
@@ -826,6 +888,11 @@ application n’utilise pas le même préfixe.
 ## Feuille de route
 
 - [x] Multi-plans de travail / pages
+- [x] Numéro de plan peint sur le canevas, sélection au clic, format modifiable
+- [x] Multi-documents : un onglet par document
+- [x] Export par plage de plans et par document
+- [x] Texte dans la forme (épouse la silhouette) et autour de la forme (sur tracé)
+- [x] Duplication par Option+glisser, jeu de raccourcis Illustrator
 - [x] Import PDF multi-pages avec sélecteur de page
 - [x] Export PDF multi-plans
 - [x] Texte PDF vraiment vectoriel (embarquement de polices et conversion en courbes)

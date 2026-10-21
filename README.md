@@ -62,6 +62,7 @@ from Windows, and pretending otherwise is how teams ship broken bundles.
 ## Features
 
 ### Drawing
+
 - **Pen (Bézier)** — click for an anchor, drag for handles, re-edit any path
   (add/remove points, curve segments).
 - **Pencil** and **vector brushes** — Line, Ink, Marker, Spray, Neon; size,
@@ -89,6 +90,33 @@ from Windows, and pretending otherwise is how teams ship broken bundles.
 | **Text → curves** | Real glyph outlines via `opentype.js`, so no font dependency |
 | **Symbols** | Definition + linked instances, with propagation |
 | **Blend** | Interpolates shape, transform and colour between two objects |
+
+### Text inside or around a shape
+
+Right-click any shape → **Write inside the shape** or **Write around the shape**.
+Two genuinely different techniques, because one does not cover the other:
+
+- **Inside** — the text follows the *silhouette*. The shape is rasterised off
+  screen, a chamfer distance transform gives the distance to the empty border of
+  every pixel, and the usable width is read row by row. Each line is therefore
+  as wide as the shape actually is at that height: a phrase typed into an
+  ellipse fills the ellipse and stops, instead of being clipped to a rectangle.
+  This is InDesign's "text on a shape", and it is the only way to write legibly
+  inside a star.
+- **Around** — the text runs along the outline. A closed path offset outwards is
+  built (edge intersection for a polygon, an enlarged ellipse otherwise) and
+  handed to `fabric.Text`, which places glyphs along a path since 5.1.
+
+The generated text is a **real object**: it is saved in the document and appears
+in every export. It is not selectable or movable, though — it is driven by the
+shape. That is deliberate: two linked objects you can drag apart is the classic
+bug of this feature (move the shape, the text stays behind). Move the shape, the
+text follows; edit the text through the shape's menu.
+
+If the silhouette cannot hold the text at the requested size, the body is
+**reduced** until everything fits, down to a 6 px floor. Silently dropping the
+end of a sentence — which is what a naive greedy wrap does — is worse than a
+smaller font: the user sees half their text and has no clue why.
 
 ---
 
@@ -137,6 +165,18 @@ across a black-to-white gradient), and re-imports into Bird as editable paths.
 A document holds several artboards, like Illustrator. One canvas: the active
 artboard lives in it, the others are serialised.
 
+- **Two buttons in the top bar**: `+` creates a *document*, `+` inside a square
+  creates an *artboard*.
+- **A number is painted beside the dashed frame.** It is an annotation, not an
+  object: it is drawn on the canvas context after the objects, so it is in no
+  SVG, no PDF, and the raster export explicitly locks it out (`state.exporting`).
+  The number sits *outside* the artboard so it never covers the artwork.
+- **Click the number** — or the frame itself — to select the artboard. The frame
+  goes solid, gets corner squares, and the right panel opens on Document so the
+  format can be changed straight away.
+- **`Ctrl/Cmd + C` then `V`** copies and pastes an artboard: the copy is inserted
+  right after the current one and becomes active. `Delete` deletes it (with the
+  usual confirmation).
 - **Artboards panel** — numbered list, rename (double-click), dimensions, object
   count, reorder, delete with confirmation.
 - **Floating switcher** at the bottom of the canvas once there are two or more.
@@ -146,6 +186,51 @@ artboard lives in it, the others are serialised.
   the whole document (this is what keeps memory sane with images).
 - Saved in the `.plume` project as `pages[]` + `activePage`; older single-page
   projects open as a one-artboard document.
+
+The number's colours are swapped in dark mode: a black cartouche on a dark canvas
+would simply not exist.
+
+---
+
+## Documents — one tab per document
+
+Bird is not limited to one document. Each **tab** under the top bar is a whole
+document with its own artboards, its own format and its own undo history.
+
+- **`+` in the tab bar** — or `Ctrl/Cmd + N` — opens the *New document* dialog:
+  six presets, free width and height, white / transparent / black background.
+- **Double-click a tab** to rename it. `×` closes it (with confirmation when it
+  holds anything). `Ctrl/Cmd + W` closes, `Ctrl/Cmd + Alt + PageUp/PageDown`
+  moves between documents.
+- **Creating a document on a blank canvas reuses the current tab** instead of
+  stacking an empty tab next to another empty tab.
+- The `.plume` project gained `documents[]` + `activeDocument`. A reader that
+  ignores those fields still opens the active document through the old
+  `pages[]` + `json` keys, so **older projects open unchanged and newer ones
+  degrade gracefully**.
+
+---
+
+## Export: choosing artboards and documents
+
+The export dialog knows what a document contains:
+
+- **Scope** — the displayed artboard · the selection · *chosen artboards*.
+- **Artboards (1, 3-5)** — a free field; empty means all. Ranges and commas, as
+  you would write in an email to a printer. The size readout updates live, so
+  you see `2 PDF pages` before pressing Export.
+- **Documents** — *active document* or *all documents*, only shown when there is
+  more than one.
+
+One artboard → the file is exactly what the chosen format produces (SVG, PNG,
+PDF/X-1a…). Several artboards → **one multi-page PDF, one page per artboard, at
+its own format**. That is a hard constraint, not a preference: there is no single
+PNG that holds twelve artboards.
+
+```js
+await Bird.export({ format: 'pdf', scope: 'pages', pages: '1, 3-5' });
+await Bird.export({ format: 'pdf', scope: 'pages', documents: 'all' });
+```
 
 ---
 
@@ -300,19 +385,40 @@ the code actually handles.
 | `Ctrl+Shift+P` / `Ctrl+E` / `Ctrl+P` | Place (import) / Export / Print |
 | `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` | Undo / Redo |
 | `Ctrl+X` `Ctrl+C` `Ctrl+V` `Ctrl+Shift+V` | Cut, copy, paste, paste in place |
+| `Alt` + drag | Duplicate the selection while dragging it |
 | `Ctrl+A` / `Ctrl+Shift+A` / `Ctrl+D` | Select all / deselect / duplicate |
-| `Ctrl+G` / `Ctrl+Shift+G` | Group / Ungroup |
+| `Ctrl+Shift+G` (or `Ctrl+G`) / `Ctrl+Shift+U` | Group / Ungroup |
 | `Ctrl+]` `Ctrl+[` `Ctrl+Shift+]` `Ctrl+Shift+[` | Forward, backward, to front, to back |
 | `Ctrl+2` / `Ctrl+Alt+2` / `Ctrl+3` / `Ctrl+Alt+3` | Lock / unlock all / hide / show all |
 | `Ctrl+Shift+O` | Outline stroke |
 | `Ctrl+Shift+.` / `Ctrl+Shift+,` | Font size up / down |
-| `Ctrl+0` / `Ctrl+1` / `Ctrl+=` / `Ctrl+-` | Fit view / 100 % / zoom in / zoom out |
-| `Shift+1` / `Shift+2` | Fit / zoom to selection |
+| `Ctrl+=` `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / zoom out / **100 %** |
+| `Ctrl+Alt+0` / `Shift+2` | Fit view / zoom to selection |
 | `Ctrl+R` / `Ctrl+'` / `Ctrl+;` | Rulers / grid / snapping |
 | `Ctrl+K` | Plug-ins |
 | `Ctrl+,` | Preferences |
 | `Ctrl+PageUp` / `Ctrl+PageDown` | Previous / next artboard |
+| `Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown` | Previous / next document |
+| `Ctrl+N` / `Ctrl+W` | New document / close document |
 | `F1` / `F11` | Shortcut sheet / full screen |
+
+Grouping is on <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> and ungrouping on
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>. <kbd>Ctrl</kbd>+<kbd>G</kbd>
+still groups — it is the Illustrator reflex and costs nothing — but
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> can no longer ungroup, since it
+now groups. Ungrouping has a single key.
+
+<span></span>
+
+Two details that were measured rather than assumed:
+
+- **`Ctrl+0` is 100 %, not "fit"**, as requested. Fit moved to `Ctrl+Alt+0`.
+- **`Ctrl++` needs its own registration.** On a physical keyboard `+` is
+  `Shift`+`=`, so the event carries `shiftKey` *and* the character `+`. The
+  command registry now folds `+` onto the `=` key, otherwise zoom-in via the
+  `+` key silently did nothing (verified: it stayed at the same zoom level).
+
+
 | `Delete`, arrows, `Shift+arrows` | Delete, nudge 1 px, nudge 10 px |
 | `Esc` / `Enter` | Cancel / finish the current path or guide drag |
 
@@ -799,6 +905,11 @@ the same prefix.
 ## Roadmap
 
 - [x] Multiple artboards
+- [x] Artboard numbering, selection and format editing on the canvas
+- [x] Multiple documents, one tab per document
+- [x] Export by artboard range and by document
+- [x] Text inside a shape (silhouette wrap) and around a shape (text on path)
+- [x] Option+drag duplication, Illustrator key map
 - [x] Multi-page PDF import with a page picker
 - [x] Multi-artboard PDF export
 - [x] PDF/X-1a, CMYK, ICC output intent

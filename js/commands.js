@@ -32,7 +32,12 @@ const ALIASES = {
   delete: 'Delete', backspace: 'Backspace', enter: 'Enter', return: 'Enter',
   tab: 'Tab', pageup: 'PageUp', pagedown: 'PageDown',
   arrowleft: 'ArrowLeft', arrowright: 'ArrowRight',
-  arrowup: 'ArrowUp', arrowdown: 'ArrowDown'
+  arrowup: 'ArrowUp', arrowdown: 'ArrowDown',
+  /* « + » est produit par Maj+= sur un clavier physique : sans cette ligne,
+     `Mod+Shift+=` ne correspondait pas à ⌘+ et le zoom avant par le « + » ne
+     faisait rien (mesuré). Le caractère et le nom de touche désignent la
+     MÊME touche logique. */
+  '+': '='
 };
 
 /* Les caractères « majuscules » de la rangée de ponctuation US. */
@@ -172,11 +177,18 @@ function groups(forPlatform) {
       map.set(entry.group, []);
       order.push(entry.group);
     }
-    map.get(entry.group).push({
-      id: entry.id,
-      label: entry.label,
-      keys: entry.keys.map((k) => labelFor(k, forPlatform)).filter(Boolean)
-    });
+    /* Une même touche peut être déclarée deux fois (Maj+= et « + » désignent
+       la même commande) : on n'affiche le libellé qu'une fois, sinon le
+       panneau « Raccourcis » liste deux fois Ctrl+= pour un seul raccourci. */
+    const seen = new Set();
+    const keys = entry.keys
+      .map((k) => labelFor(k, forPlatform))
+      .filter((label) => {
+        if (!label || seen.has(label)) return false;
+        seen.add(label);
+        return true;
+      });
+    map.get(entry.group).push({ id: entry.id, label: entry.label, keys: keys });
   });
   return order.map((name) => ({ name, items: map.get(name) }));
 }
