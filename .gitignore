@@ -26,6 +26,6 @@ astro/src/generated/
 
 # Paquets FTP / web : artefacts régénérables, pas des sources. Ils vivent en
 # local pour être déposés sur le serveur, ils n'ont rien à faire dans
-# l'historique Git.
-bird-ftp-*.zip
-bird-web-*.zip
+# l'historique Git. Règle large volontairement : aucun .zip n'est une source
+# du projet, quel que soit le nom donné à l'archive au moment de l'empaqueter.
+*.zip
