@@ -483,9 +483,11 @@ L’icône PWA `maskable` est un **fichier séparé** (`icons/icon-maskable-512.
 marge 20 %) : la zone sûre d’Android est un cercle de 80 % de diamètre, et les
 ailes de l’icône principale y seraient rognées.
 
-En thème sombre les icônes sont inversées (`filter: invert(1)`). Sur un tracé
-transparent, cela rend les traits sombres clairs et les aplats blancs sombres —
-le rendu correct pour une interface claire sur fond sombre.
+En thème sombre les icônes de fichiers sont inversées (`filter: invert(1)` sur
+`img.tool-icon`). Sur un tracé transparent, cela rend les traits sombres clairs
+et les aplats blancs sombres — le rendu correct pour une interface claire sur
+fond sombre. Les `<svg>` en ligne, eux, suivent `currentColor` et ne sont
+**pas** inversés : voir plus bas.
 
 ### Thème jour / nuit
 
@@ -510,10 +512,21 @@ Trois choses échappent aux variables et demandent un traitement explicite :
   `--canvas-*` et `--ruler-*` (avec cache par thème) et se vide sur l’évènement
   `bird:theme`.
 * **Le papier.** Le plan de travail garde sa propre couleur (`artColor`, blanc
-  par défaut) : le mode sombre assombrit l’entourage, jamais le document.
-* **Les sources `<img>`.** Un SVG noir chargé par `<img>` ne reçoit pas
-  `currentColor` ; ces images sont inversées par `filter: invert(1)` dans le
-  bloc sombre.
+  par défaut) : le mode sombre assombrit l’entourage, jamais le document. Tout ce
+  qui est posé **sur** le papier ne doit donc pas suivre le thème — c’est le rôle
+  de `--paper-ink`, `--paper-chip` et `--paper-line`. Ils sont définis une fois
+  dans `:root` et volontairement **non** redéfinis dans le bloc sombre :
+  l’indication du plan vide héritait de `--n44` et passait à `#e9e9e9` sur une
+  feuille blanche, donc invisible.
+* **Deux sortes d’icônes, deux traitements.** Un SVG noir chargé par `<img>` ne
+  reçoit jamais `currentColor` : ceux-là sont inversés (`img.tool-icon { filter:
+  invert(1) }`). Un `<svg>` **en ligne**, lui, hérite de `currentColor` et il est
+  donc déjà correct — l’inverser le renvoie au sombre. Le sélecteur disait
+  `.tool-icon` et attrapait les deux : mesuré, des traits `rgb(233,233,233)`
+  devenaient `rgb(22,22,22)` sur un canevas à `#161616`. Deux corrections qui
+  s’annulent, exactement comme le bug de zoom qui divisait par le DPR *et*
+  multipliait par le rapport du canvas. `check-ui.mjs` refuse désormais le
+  sélecteur nu.
 
 ### Langue de l’interface
 

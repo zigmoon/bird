@@ -496,6 +496,67 @@ function checkIconPlates() {
   }
 }
 
+/* ── 9. Le thème sombre ne corrige pas deux fois les icônes ───
+   Les icônes de Bird sont de deux sortes, et elles ne se corrigent pas de la
+   même façon :
+
+     · des <img> vers un fichier .svg — `currentColor` y vaut le noir initial,
+       puisque le fichier est un document isolé ; il faut donc les INVERSER ;
+     · des <svg> en ligne — ils héritent de `currentColor`, donc ils sont DÉJÀ
+       à la couleur du thème ; il ne faut surtout pas les toucher.
+
+   La règle `html[data-theme="dark"] .tool-icon { filter: invert(1) }`
+   attrapait les deux. Mesuré : trait `rgb(233,233,233)` puis inversion →
+   `rgb(22,22,22)` sur un fond à `#161616`, soit une icône noire sur fond noir.
+   Le sélecteur doit nommer `img`.
+
+   Même famille de bug que le zoom qui divisait par le DPR *et* multipliait par
+   le rapport du canvas : deux corrections successives s'annulent. */
+function checkDarkIconFilter() {
+  const file = path.join(root, 'css', 'style.css');
+  if (!fs.existsSync(file)) return;
+  const raw = fs.readFileSync(file, 'utf8');
+  const lines = raw.split('\n');
+  const code = raw
+    .replace(/\/\*[\s\S]*?\*\//g, (b) => b.replace(/[^\n]/g, ' '))
+    .split('\n');
+
+  for (const [index, line] of code.entries()) {
+    if (!/filter\s*:\s*invert\(/.test(line)) continue;
+    // remonte jusqu'au sélecteur de la règle (la ligne qui porte le `{`)
+    let selector = line;
+    for (let back = index; back >= 0 && back > index - 6; back--) {
+      if (code[back].includes('{')) { selector = code[back]; break; }
+    }
+    if (!/data-theme="dark"/.test(selector)) continue;
+    // `.tool-icon` nu = attrape aussi les <svg> en ligne.
+    const bare = /(^|[\s,])\.tool-icon\b/.test(selector.replace(/img\s*\.\s*tool-icon/g, ''));
+    if (bare) {
+      errors.push(
+        `css/style.css:${index + 1} — \`filter: invert()\` sur \`.tool-icon\`\n` +
+        '    ' + (lines[index] || '').trim() + '\n' +
+        '    Ce sélecteur attrape aussi les <svg> en ligne, qui suivent déjà\n' +
+        '    `currentColor` : l’inversion les renvoie au sombre, invisible sur\n' +
+        '    le canevas sombre. Écrire `img.tool-icon` — les fichiers .svg seuls\n' +
+        '    ont besoin d’être inversés.'
+      );
+    }
+  }
+
+  /* Et la contrepartie : les jetons d'ENCRE DE PAPIER ne doivent pas être
+     redéfinis dans le thème sombre. Le plan de travail garde sa couleur dans
+     les deux thèmes ; ce qui est posé dessus doit donc rester sombre. */
+  const darkBlock = raw.match(/html\[data-theme="dark"\]\s*\{[\s\S]*?\n\}/);
+  if (darkBlock && /--paper-ink\s*:/.test(darkBlock[0])) {
+    errors.push(
+      'css/style.css — `--paper-ink` est redéfini dans le thème sombre\n' +
+      '    Le plan de travail garde sa couleur en thème sombre : l’encre posée\n' +
+      '    dessus ne doit pas s’inverser, sinon l’indication du plan vide\n' +
+      '    devient claire sur du papier blanc.'
+    );
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
@@ -504,6 +565,7 @@ checkTranslationSource();
 checkVersionConsistency();
 checkDefaultToolsOff();
 checkIconPlates();
+checkDarkIconFilter();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -511,5 +573,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut, aucune plaque sous les icônes');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut, aucune plaque sous les icônes, pas de double inversion en thème sombre');
 for (const n of notes) console.log('  · ' + n);

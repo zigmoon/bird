@@ -1,7 +1,7 @@
 {
   "name": "bird-desktop",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Coquille native de Bird (macOS, Windows, Linux) — Tauri 2",
   "type": "module",
   "scripts": {

@@ -595,10 +595,11 @@ function bindSidebars() {
         const target = document.querySelector('.props-section[data-section="' + section + '"]');
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          // flash visuel
-          target.style.transition = 'background .5s';
-          target.style.background = '#ececec';
-          setTimeout(() => { target.style.background = 'transparent'; }, 600);
+          /* Le repère visuel passe par une CLASSE, pas par une couleur écrite
+             en JS : `#ececec` en dur donnait un éclair blanc en thème sombre.
+             La classe lit `var(--n10)`, qui s'inverse avec le thème. */
+          target.classList.add('is-flash');
+          setTimeout(() => target.classList.remove('is-flash'), 600);
         }
         // rend la section texte visible si sélection d'un texte
         if (section === 'textProps') {
@@ -7852,7 +7853,7 @@ if (typeof ResizeObserver === 'function') {
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.6.0',
+  version: '2.6.1',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

@@ -494,9 +494,10 @@ The `maskable` PWA icon is a **separate file** (`icons/icon-maskable-512.png`,
 20 % margin): the Android safe zone is a circle of 80 % diameter, and the main
 icon's wings would be clipped by it.
 
-In dark mode icons are inverted (`filter: invert(1)`). On transparent line art
-that turns dark strokes light and white fills dark — the correct rendering for a
-light-on-dark interface.
+In dark mode the **file-based** icons are inverted (`img.tool-icon { filter:
+invert(1) }`). On transparent line art that turns dark strokes light and white
+fills dark — the correct rendering for a light-on-dark interface. Inline `<svg>`
+elements follow `currentColor` and are **not** inverted; see below.
 
 ### Day / night theme
 
@@ -520,9 +521,20 @@ Three things sit outside the variables and need explicit handling:
   `--ruler-*` custom properties (cached per theme) and is invalidated on the
   `bird:theme` event.
 * **The paper.** The artboard keeps its own colour (`artColor`, white by
-  default): dark mode darkens the surround, never the document.
-* **`<img>` sources.** A black SVG loaded through `<img>` does not receive
-  `currentColor`; those are inverted with `filter: invert(1)` in the dark block.
+  default): dark mode darkens the surround, never the document. Anything painted
+  *on* the paper therefore must **not** follow the theme — that is what
+  `--paper-ink`, `--paper-chip` and `--paper-line` are for. They are defined once
+  in `:root` and deliberately **not** redefined in the dark block: the empty
+  artboard hint used to inherit `--n44` and turned `#e9e9e9` on a white sheet,
+  invisible.
+* **Two kinds of icon, two treatments.** A black SVG loaded through `<img>` never
+  receives `currentColor`, so those are inverted (`img.tool-icon { filter:
+  invert(1) }`). An **inline** `<svg>` does inherit `currentColor` and is already
+  correct — invert it too and it goes back to dark. The selector said
+  `.tool-icon` and caught both: measured, `rgb(233,233,233)` strokes were then
+  inverted to `rgb(22,22,22)` on a `#161616` canvas. Two corrections cancel each
+  other, exactly like the zoom bug that divided by the DPR *and* multiplied by
+  the canvas ratio. `check-ui.mjs` now refuses the bare selector.
 
 ### Interface language
 

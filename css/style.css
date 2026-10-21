@@ -79,6 +79,17 @@
   --ruler-tick: #cfcfcf;
   --ruler-label: #8b8b8b;
   --ruler-guide: rgba(26, 26, 26, .75);
+
+  /* Encre du PAPIER — l'inverse des jetons d'interface. Le plan de travail
+     garde sa propre couleur dans les deux thèmes (c'est le document) : tout ce
+     qui est posé dessus doit donc rester sombre sur clair, même en thème
+     sombre. Sans ces trois-là, l'indication « Choisissez un outil » passait de
+     #1a1a1a à #e9e9e9 sur un plan blanc — mesuré, donc invisible.
+     Elles ne sont volontairement PAS redéfinies dans le thème sombre, et
+     `scripts/check-ui.mjs` le vérifie. */
+  --paper-ink: #1a1a1a;
+  --paper-chip: #ffffff;
+  --paper-line: #e0e0e0;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -592,9 +603,18 @@ html[data-theme="dark"] .btn-theme .theme-icon--sun { display: block; }
 .empty-hint {
   position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  text-align: center; color: var(--n44); opacity: 0.7;
+  /* Le plan de travail garde sa couleur en thème sombre : cette indication est
+     posée sur le PAPIER, pas sur l'interface. Une encre qui suivrait le thème
+     donnait du #e9e9e9 sur du blanc — totalement invisible. */
+  text-align: center; color: var(--paper-ink);
+  opacity: 0.7;
   pointer-events: none;
   transition: opacity .3s;
+}
+.empty-hint kbd {
+  background: var(--paper-chip);
+  border-color: var(--paper-line);
+  color: var(--paper-ink);
 }
 .empty-hint .empty-logo {
   display: block;
@@ -719,6 +739,14 @@ kbd {
   display: flex; flex-direction: column; gap: 14px;
 }
 .props-section { min-width: 0; }
+
+/* Repère de la section qu'on vient de cibler depuis le rail d'icônes.
+   Une CLASSE, jamais une couleur écrite en JS : le littéral `#ececec` donnait
+   un éclair blanc en thème sombre. `--n10` s'inverse avec le thème. */
+.props-section.is-flash {
+  background: var(--n10);
+  transition: background 480ms ease-out;
+}
 .props-section h3 {
   margin: 0; font-size: 9px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 1.5px;
@@ -1772,11 +1800,21 @@ html[data-theme="dark"] .guide-tip { background: #1a1a1a; color: #ffffff; }
    Les icônes sont désormais posées sur du transparent (aucune plaque) : un
    inversement transforme les tracés sombres en tracés clairs et les
    remplissages blancs en remplissages sombres, ce qui est exactement le
-   rendu attendu d'un dessin au trait sur fond sombre. */
+   rendu attendu d'un dessin au trait sur fond sombre.
+
+   ⚠️ `img.tool-icon` SEULEMENT, et surtout pas `.tool-icon`.
+   Le rail d'outils contient les deux sortes d'icônes : des <img> (fichiers
+   .svg) et des <svg> en ligne. Un SVG en ligne hérite de `currentColor`, donc
+   il est DÉJÀ à la bonne couleur par les variables du thème : le ré-inverser
+   le renvoie au sombre. Mesuré : trait `rgb(233, 233, 233)` puis
+   `filter: invert(1)` → `rgb(22, 22, 22)` sur un fond à `#161616`, soit une
+   icône noire sur fond noir. Les deux corrections s'annulaient — exactement le
+   défaut du zoom qui divisait par le DPR *et* multipliait par le rapport du
+   canvas. `scripts/check-ui.mjs` refuse désormais le sélecteur nu. */
 html[data-theme="dark"] .brand .logo,
 html[data-theme="dark"] .splash-logo-big,
 html[data-theme="dark"] .startup-logo img,
-html[data-theme="dark"] .tool-icon { filter: invert(1); }
+html[data-theme="dark"] img.tool-icon { filter: invert(1); }
 
 /* ═══════════════════════════════════════════════════════════════
    ONGLETS DES DOCUMENTS
