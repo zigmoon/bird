@@ -557,6 +557,34 @@ function checkDarkIconFilter() {
   }
 }
 
+/* ── 10. Une section détachée doit rester visible dans son widget ──
+   `is-detached` retire la section du panneau (`display: none`). Comme la
+   carte flottante CONTIENT cette même section, la règle l'effaçait aussi :
+   le widget s'ouvrait, titre compris, avec un corps vide — la fonction
+   semblait absente alors qu'elle était simplement masquée. Le correctif est
+   une remise en `block` portée par `.sp-widget-body` ; ce contrôle refuse la
+   suppression de cette règle. */
+function checkFloatingSections() {
+  const file = path.join(root, 'css', 'style.css');
+  if (!fs.existsSync(file)) return;
+  const raw = fs.readFileSync(file, 'utf8');
+  const code = raw.replace(/\/\*[\s\S]*?\*\//g, (b) => b.replace(/[^\n]/g, ' '));
+
+  const hiddenInPanel = /\.props-section\.is-detached\s*\{[^}]*display\s*:\s*none/.test(code);
+  if (!hiddenInPanel) return;   // la cause a disparu : plus rien à neutraliser
+
+  const visibleInCard = /\.sp-widget-body\s+\.props-section\.is-floating\s*\{[^}]*display\s*:\s*block/.test(code);
+  if (!visibleInCard) {
+    errors.push(
+      'css/style.css — une section détachée resterait invisible\n' +
+      '    `.props-section.is-detached { display: none }` s’applique aussi à la\n' +
+      '    section DÉPLACÉE dans la carte flottante, qui porte les deux classes.\n' +
+      '    Ajouter `.sp-widget-body .props-section.is-floating { display: block }`,\n' +
+      '    sinon le widget s’ouvre avec un corps vide.'
+    );
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
@@ -566,6 +594,7 @@ checkVersionConsistency();
 checkDefaultToolsOff();
 checkIconPlates();
 checkDarkIconFilter();
+checkFloatingSections();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -573,5 +602,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut, aucune plaque sous les icônes, pas de double inversion en thème sombre');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut, aucune plaque sous les icônes, pas de double inversion en thème sombre, sections détachées visibles');
 for (const n of notes) console.log('  · ' + n);

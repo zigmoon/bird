@@ -19,13 +19,22 @@
 </p>
 
 <p align="center">
+  <a href="https://app.zigmoon.com/bird/"><b>▶ Open the web app — app.zigmoon.com/bird</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/zigmoon/bird/releases/latest"><b>⬇ Download for macOS · Windows · Linux</b></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/zigmoon/bird/releases/latest"><img src="https://img.shields.io/github/v/release/zigmoon/bird?label=release" alt="Latest release"></a>
   <a href="https://github.com/zigmoon/bird/actions/workflows/desktop.yml"><img src="https://github.com/zigmoon/bird/actions/workflows/desktop.yml/badge.svg" alt="Build"></a>
+  <a href="https://app.zigmoon.com/bird/"><img src="https://img.shields.io/badge/web%20app-online-1a1a1a" alt="Web app online"></a>
 </p>
+
+> **The web version is live: <https://app.zigmoon.com/bird/>** — nothing to
+> install, the whole engine runs in the browser. The same build is shipped as
+> the desktop app on the [releases page](https://github.com/zigmoon/bird/releases/latest).
 
 ---
 
@@ -174,9 +183,22 @@ artboard lives in it, the others are serialised.
 - **Click the number** — or the frame itself — to select the artboard. The frame
   goes solid, gets corner squares, and the right panel opens on Document so the
   format can be changed straight away.
+- **Move it.** Drag the frame or the number: the artboard slides over the
+  workspace and the artwork does not move with it — the gesture Illustrator
+  users expect, and the only one that makes sense when the artboard is a crop
+  on an infinite surface. `X` / `Y` in the Document panel set the exact
+  position; arrow keys nudge it (10 px with `Shift`). The workspace is a shade
+  greyer than the sheet, so the sheet is visible wherever you put it.
+- **Bleed** is an artboard property (0–200 px), stored with the artboard and
+  used as the default in the export dialog. A printer asking for 3 mm once can
+  still override it at export time.
+- **Duplicate / Delete** appear in the Document panel as soon as the artboard is
+  selected; `Delete` does the same from the keyboard.
 - **`Ctrl/Cmd + C` then `V`** copies and pastes an artboard: the copy is inserted
-  right after the current one and becomes active. `Delete` deletes it (with the
-  usual confirmation).
+  right after the current one, in the same document, and becomes active.
+- **A new artboard lands next to the current one, in the current document** — and
+  the tab's counter (`3 artboards`) updates immediately, so it is obvious that
+  nothing switched document.
 - **Artboards panel** — numbered list, rename (double-click), dimensions, object
   count, reorder, delete with confirmation.
 - **Floating switcher** at the bottom of the canvas once there are two or more.
@@ -184,11 +206,30 @@ artboard lives in it, the others are serialised.
 - **Per-artboard undo/redo**: switching stores the history stacks, so undoing on
   one artboard never touches another — and each snapshot holds one artboard, not
   the whole document (this is what keeps memory sane with images).
-- Saved in the `.plume` project as `pages[]` + `activePage`; older single-page
-  projects open as a one-artboard document.
+- Saved in the `.plume` project as `pages[]` + `activePage`, with `ox`, `oy` and
+  `bleed` per artboard (all defaulting to 0); older single-page projects open as
+  a one-artboard document.
 
 The number's colours are swapped in dark mode: a black cartouche on a dark canvas
 would simply not exist.
+
+### Transform — the numbers you can read *and* edit
+
+Selecting anything — shape, path, image, group, multi-selection — opens a
+**Transform** section at the top of the right panel: `X`, `Y`, `W`, `H`, angle,
+plus a *Constrain proportions* switch.
+
+- The values are the **bounding box** of the selection, not `object.width`: a
+  shape rotated 30° is wider on screen than its local width, and the measure
+  people expect is the one they can see.
+- `X`/`Y` are **artboard coordinates** — 0 at the artboard's top-left corner,
+  like Illustrator's rulers.
+- Typing a value **translates** the selection by the difference between the
+  wanted and the measured box, so it stays exact whatever the rotation or the
+  origin. Resizing re-anchors the top-left corner, so a rotated shape grows
+  without sliding.
+- One field edit is one undo step, and the fields follow the mouse live while
+  you drag, scale or rotate.
 
 ---
 
@@ -309,6 +350,13 @@ the header, collapse, dock back. Position is remembered.
 
 Because the **DOM node itself is moved** (not cloned), every listener keeps
 working — a detached layer panel is still the live layer panel.
+
+The consequence is worth stating once, because it caused a real bug: the section
+carries both `is-detached` (which hides it *in the panel*) and `is-floating`
+(which restyles it *in the card*). The hide rule won, so a detached widget opened
+with a title and an empty body — the card appeared, its controls did not. The
+override lives in `.sp-widget-body .props-section.is-floating { display: block }`,
+and `scripts/check-ui.mjs` refuses to let it disappear.
 
 ```js
 Bird.widgets.detach('layers');
@@ -834,7 +882,7 @@ Two coordinate spaces, and mixing them is silent:
 
 ### UI invariants, checked before every build
 
-`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes eight
+`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes ten
 regressions that already shipped, each invisible to the developer and obvious to
 the user:
 
@@ -848,6 +896,8 @@ the user:
 | One version number, everywhere | a global `2.3.0 → 2.3.1` replacement in `Cargo.lock` bumped six unrelated `icu_*` crates to a version that does not exist; all four desktop builds failed |
 | No display tool active by default | rulers and snapping were on at first paint, so a new document opened on a crowded artboard |
 | No background plate on any icon | the icon was a white rounded square, alone among SuperPrint, SuperPhoto and PDF-YZ — it disappeared on a light tab bar |
+| No double inversion in dark mode | `html[data-theme="dark"] .tool-icon { filter: invert(1) }` also caught inline `<svg>`, which already follow `currentColor`: the icons were sent back to black on a black canvas |
+| A detached section must stay visible | `is-detached` hides a section *in the panel*; the floating card contains that same section, so the rule emptied the widget — the card opened with a title and no controls |
 
 A legitimate exception is written as `check-ui:allow <reason>` (or
 `i18n:allow <reason>` for the translation one) on the same line.

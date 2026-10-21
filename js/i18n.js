@@ -37,6 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
+    'v2.7.0 — transformation, fonds perdus, panneaux détachables':
+      'v2.7.0 — transform, bleed, detachable panels',
     'v2.6.1 — plans, documents, texte dans la forme':
       'v2.6.1 — artboards, documents, text inside a shape',
     'v2.1.2 — anglais par défaut · français dans les préférences':
@@ -316,8 +318,25 @@
     'Choisissez le numéro ci-dessous.': 'Choose the page number below.',
     'Importer un PDF': 'Import a PDF',
     'Fond perdu': 'Bleed',
+    'Fonds perdus': 'Bleed',
     'Format': 'Format',
     'Personnalisé': 'Custom',
+
+    /* ── Transformation (panneau de droite) ── */
+    'Transformation': 'Transform',
+    'Conserver les proportions': 'Constrain proportions',
+    "L et H s'appliquent à la boîte englobante.":
+      'W and H apply to the bounding box.',
+    'Dupliquer le plan': 'Duplicate the artboard',
+    'Dupliquer ce plan de travail': 'Duplicate this artboard',
+    'Supprimer ce plan de travail': 'Delete this artboard',
+    'Supprimer': 'Delete',
+    // Abréviations des cotes : « L » (largeur) devient « W » en anglais.
+    'L': 'W',
+    /* ── Panneaux détachables ── */
+    'Rattacher au panneau de droite': 'Dock back to the right panel',
+    'Rattacher tous les widgets': 'Dock all widgets',
+    'Replier / déplier': 'Collapse / expand',
     'Personnalisé…': 'Custom…',
     'Paysage 4:3': 'Landscape 4:3',
     'Portrait 3:4': 'Portrait 3:4',

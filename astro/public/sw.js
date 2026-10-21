@@ -2,7 +2,7 @@
 /* Toute modification d'un asset versionné doit changer ce nom : sinon les
    visiteurs déjà passés gardent l'ancien fichier, servi en cache-first.
    C'est ce qui laissait l'ancien logo dans la barre haute. */
-const CACHE = 'bird-v2.6.1';
+const CACHE = 'bird-v2.7.0';
 const PRECACHE = [
   '/',
   '/editor',

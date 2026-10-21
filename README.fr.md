@@ -7,6 +7,10 @@ Bézier, calques, règles et repères, Pathfinder, texte éditable, plug-ins, pa
 
 Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox, Safari), ou utilisez la version Astro (`astro/`) / le moteur Rust (`rust/`).
 
+**La version web est en ligne : <https://app.zigmoon.com/bird/>** — rien à installer,
+tout le moteur tourne dans le navigateur. La même version est livrée en application
+de bureau sur la [page des releases](https://github.com/zigmoon/bird/releases/latest).
+
 ---
 
 ## Sommaire
@@ -24,6 +28,15 @@ Ouvrez simplement `index.html` dans un navigateur moderne (Chrome, Edge, Firefox
 - [Développement](#développement)
 
 ---
+
+## Nouveautés v2.7
+
+| Domaine | Ce qui change |
+|---|---|
+| **Transformation** | Panneau de cotes sur toute sélection : X, Y, L, H, angle — lisibles **et** modifiables, en coordonnées de plan de travail |
+| **Plans de travail** | Déplaçables sur le marbre (glisser le cadre ou le numéro, champs X/Y, flèches), supprimables, dupliquables depuis le panneau Document |
+| **Fonds perdus** | Propriété du plan (0–200 px), proposée par défaut à l'export PDF/X |
+| **Panneaux détachables** | Un widget détaché s'ouvrait vide : la règle qui masque la section dans le panneau l'effaçait aussi dans la carte |
 
 ## Nouveautés v1.7
 
@@ -117,6 +130,8 @@ Chaque section possède un bouton **détacher**. Une fois détachée :
 - elle **continue de fonctionner à l’identique** : c’est le même nœud DOM qui est déplacé, pas une copie. Aucun écouteur n’est perdu.
 
 Aucune liste de widgets séparée : **ce sont les sections existantes** du panneau qui se détachent. L’icône de la section dans le rail porte un point noir tant que son widget flotte, et un clic la ramène au premier plan. `•••` de l’en-tête replie le panneau, le bouton ↧ rattache tout d’un coup.
+
+Conséquence à écrire une fois, parce qu’elle a causé un vrai bug : la section porte à la fois `is-detached` (qui la masque *dans le panneau*) et `is-floating` (qui la restyle *dans la carte*). La règle de masquage l’emportait, donc un widget détaché s’ouvrait avec son titre et **un corps vide** — la carte apparaissait, ses fonctions non. Le correctif tient en une ligne, `.sp-widget-body .props-section.is-floating { display: block }`, et `scripts/check-ui.mjs` refuse qu’elle disparaisse.
 
 ```js
 Bird.widgets.detach('layers');   // détache le panneau Calques
@@ -288,14 +303,27 @@ Un document contient plusieurs plans de travail, chacun avec son format, son fon
 - **Deux boutons dans la barre haute** : `+` crée un *document*, le `+` dans un carré crée un *plan de travail*.
 - **Un numéro est peint à côté du cadre en pointillé.** C’est une annotation, pas un objet : elle est dessinée sur le contexte du canvas après les objets, donc absente de tout SVG, de tout PDF, et l’export raster la verrouille explicitement (`state.exporting`). Le numéro se place *en dehors* du plan pour ne jamais couvrir le dessin.
 - **Clic sur le numéro** — ou sur le cadre — pour sélectionner le plan : le cadre passe en plein, reçoit des équerres, et le panneau de droite s’ouvre sur *Document* pour changer le format immédiatement.
-- **`Ctrl/⌘ + C` puis `V`** copie et colle un plan : la copie s’insère juste après le plan courant et devient active. `Suppr` le supprime (avec confirmation).
+- **Le déplacer.** Glisser le cadre ou le numéro fait glisser la planche sur le marbre ; le dessin, lui, ne bouge pas — le geste d’Illustrator, et le seul qui garde un sens quand le plan est une découpe sur une surface infinie. Les champs `X`/`Y` du panneau *Document* donnent la position exacte, les flèches la déplacent d’un pixel (10 avec `Maj`). Le marbre est légèrement gris pour que la planche blanche reste visible où qu’on la pose.
+- **Fonds perdus** : propriété du plan (0–200 px), enregistrée avec lui et proposée par défaut dans la boîte d’export. L’imprimeur qui demande 3 mm une fois garde la main au moment d’exporter.
+- **Dupliquer / Supprimer** apparaissent dans le panneau *Document* dès que le plan est sélectionné ; `Suppr` fait la même chose au clavier.
+- **`Ctrl/⌘ + C` puis `V`** copie et colle un plan : la copie s’insère juste après le plan courant, **dans le même document**, et devient active.
+- **Un nouveau plan se place à côté du plan courant, dans le document courant** — et le compteur de l’onglet (`3 plans`) se met à jour aussitôt : on voit qu’on n’a pas changé de document.
 - **Panneau *Plans de travail*** : liste numérotée, nom éditable (double-clic), dimensions, nombre d’objets, monter/descendre, supprimer (confirmation si le plan n’est pas vide).
 - **Sélecteur flottant** en bas du plan de travail, visible dès deux plans : `‹ Plan › ` + compteur, cliquable pour ouvrir le panneau.
 - **Raccourcis** `Ctrl+Page↑` / `Ctrl+Page↓`.
 - **Historique isolé par plan** : annuler sur le plan A ne touche pas le plan B. Les piles sont mémorisées au changement de plan.
-- **Persistance** : le projet `.plume` enregistre tous les plans (`pages[]` + `activePage`). Un ancien projet mono-plan s’ouvre comme un document à un seul plan.
+- **Persistance** : le projet `.plume` enregistre tous les plans (`pages[]` + `activePage`), avec `ox`, `oy` et `bleed` par plan (tous à 0 par défaut). Un ancien projet mono-plan s’ouvre comme un document à un seul plan.
 
 Les deux jetons du numéro s’échangent en thème sombre : un cartouche noir sur un canevas sombre n’existerait pas.
+
+### Transformation — les cotes qu’on lit *et* qu’on règle
+
+Sélectionner quoi que ce soit — forme, tracé, image, groupe, sélection multiple — ouvre une section **Transformation** en haut du panneau de droite : `X`, `Y`, `L`, `H`, angle, plus une bascule *Conserver les proportions*.
+
+- Les valeurs sont la **boîte englobante** de la sélection, pas `object.width` : une forme tournée de 30° est plus large à l’écran que sa largeur locale, et c’est bien la cote visible qu’on attend.
+- `X`/`Y` sont des **coordonnées de plan de travail** — 0 au coin haut-gauche du plan, comme les règles d’Illustrator.
+- Saisir une valeur **translate** la sélection de l’écart entre la cote voulue et la cote mesurée : c’est exact quel que soit l’angle ou l’origine. Un redimensionnement réancre le coin haut-gauche, donc une forme tournée grandit sans glisser.
+- Une saisie = une annulation, et les champs suivent la souris en direct pendant un déplacement, une mise à l’échelle ou une rotation.
 
 ```js
 Bird.pages.list()                  // [{ index, id, name, width, height, active }]
@@ -818,7 +846,7 @@ Deux espaces de coordonnées, et les mélanger ne fait aucun bruit :
 
 ### Invariants d’interface, vérifiés avant chaque build
 
-`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode huit
+`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode dix
 régressions déjà livrées, invisibles côté code et évidentes côté utilisateur :
 
 | Contrôle | Le bug qu’il empêche |
@@ -831,6 +859,8 @@ régressions déjà livrées, invisibles côté code et évidentes côté utilis
 | Un seul numéro de version, partout | un remplacement global `2.3.0 → 2.3.1` dans `Cargo.lock` a poussé six crates `icu_*` vers une version inexistante ; les quatre builds de bureau ont échoué |
 | Aucun outil d’affichage actif par défaut | règles et magnétisme étaient actifs au premier rendu : un document neuf s’ouvrait sur un plan encombré |
 | Aucun fond derrière une icône | l’icône était un carré blanc arrondi, seule parmi SuperPrint, SuperPhoto et PDF-YZ — elle disparaissait sur une barre d’onglets claire |
+| Pas de double inversion en thème sombre | `html[data-theme="dark"] .tool-icon { filter: invert(1) }` attrapait aussi les `<svg>` en ligne, qui suivent déjà `currentColor` : les icônes repartaient au noir sur un canevas noir |
+| Une section détachée doit rester visible | `is-detached` masque une section *dans le panneau* ; la carte flottante contient cette même section, donc la règle vidait le widget — la carte s’ouvrait avec un titre et aucun contrôle |
 
 Une exception légitime s’écrit `check-ui:allow <raison>` (ou `i18n:allow
 <raison>` pour la traduction) sur la même ligne.

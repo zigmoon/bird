@@ -48,6 +48,12 @@ const state = {
   artboardW: 800,
   artboardH: 600,
   artboardColor: '#ffffff',
+  /* Position du plan dans la scène (coordonnées document) et fonds perdus.
+     Le plan n'est plus cloué en (0,0) : on peut le déplacer comme une
+     planche sur le marbre, sans déplacer le dessin qu'elle contient. */
+  artboardX: 0,
+  artboardY: 0,
+  artboardBleed: 0,
   dirty: false,
 
   // outil plume
@@ -212,7 +218,9 @@ function init() {
     ctx.fillStyle = themeColor('bg', '#ffffff');
     ctx.fillRect(0, 0, this.getWidth(), this.getHeight());
     const vpt = this.viewportTransform || [1, 0, 0, 1, 0, 0];
-    const x = vpt[4], y = vpt[5];
+    const artX = Number(this.__plume.artX) || 0;
+    const artY = Number(this.__plume.artY) || 0;
+    const x = artX * vpt[0] + vpt[4], y = artY * vpt[3] + vpt[5];
     const w = this.__plume.artW * vpt[0];
     const h = this.__plume.artH * vpt[3];
     /* Tout trait d'un pixel doit être calé sur la grille des pixels PHYSIQUES.
@@ -266,6 +274,9 @@ function init() {
   canvas.__plume.artW = state.artboardW;
   canvas.__plume.artH = state.artboardH;
   canvas.__plume.artColor = state.artboardColor;
+  canvas.__plume.artX = state.artboardX;
+  canvas.__plume.artY = state.artboardY;
+  canvas.__plume.artBleed = state.artboardBleed;
 
   // Le canvas occupe toute la scène (plan de travail infini).
   resizeCanvas();
@@ -280,6 +291,7 @@ function init() {
     renderShortcuts();
   }
   bindProps();
+  bindTransform();
   bindAlignment();
   bindLayerPanel();
   bindShapeControls();
@@ -507,8 +519,7 @@ function resetDocument() {
   }];
   state.activeDoc = 0;
   pageHistory.clear();
-  state.artboardSelected = false;
-  document.body.classList.remove('artboard-selected');
+  selectArtboard(false);
   state.dirty = false;
   setDirty(false);
   projectPath = null;
@@ -736,6 +747,9 @@ function bindCanvas() {
     e.preventDefault();
     e.stopPropagation();
     selectArtboard(true);
+    // Le cadre et le cartouche servent aussi de poignée : c'est la seule
+    // façon de placer la planche sur le marbre.
+    startArtboardDrag(e);
   }, true);
 
   /* ── Option + glisser : dupliquer la sélection ──
@@ -808,8 +822,10 @@ function bindCanvas() {
   canvas.on('selection:cleared', onSelection);
   // Capture l'état AVANT la transformation : sans cela, « Annuler » rechargeait
   // l'état déjà modifié (déplacement, rotation, redimensionnement).
-  canvas.on('object:modified', () => { commitUndo('Modification'); setDirty(true); renderLayers(); });
-  canvas.on('object:moving', (opt) => snapMovingObject(opt.target));
+  canvas.on('object:modified', () => { commitUndo('Modification'); setDirty(true); renderLayers(); syncTransformPanel(); });
+  canvas.on('object:moving', (opt) => { snapMovingObject(opt.target); syncTransformPanel(); });
+  canvas.on('object:scaling', syncTransformPanel);
+  canvas.on('object:rotating', syncTransformPanel);
   canvas.on('object:added', () => { updateHint(); renderLayers(); });
   canvas.on('object:removed', () => { updateHint(); renderLayers(); });
   canvas.on('text:changed', onSelection);
@@ -972,17 +988,122 @@ function beginPenEdit(path) {
   startPenEdit(path);
 }
 
+/* ════════════════════════════════════════════════════════════
+   TRANSFORMATION — LES COTES DE LA SÉLECTION
+   ────────────────────────────────────────────────────────────
+   Les champs lisent la BOÎTE ENGLOBANTE (`getBoundingRect(true, true)`),
+   pas `obj.width` : une forme tournée de 30° est plus large à l'écran que
+   sa largeur locale, et c'est la cote visible que l'utilisateur attend.
+
+   Écrire X/Y ne pose PAS `left`/`top` en absolu — faux dès qu'il y a une
+   rotation, car `left`/`top` désignent alors le centre du cadre tourné. On
+   TRANSLATE l'objet du delta entre la cote voulue et la cote mesurée : vrai
+   quel que soit l'angle, l'origine ou le type d'objet (groupe compris).
+
+   Les cotes sont exprimées dans le repère du PLAN DE TRAVAIL, comme les
+   règles d'Illustrator : X = 0 au bord gauche du plan, pas de la scène.
+════════════════════════════════════════════════════════════ */
+const TF_FIELDS = [['tfX', 'x'], ['tfY', 'y'], ['tfW', 'w'], ['tfH', 'h'], ['tfAngle', 'angle']];
+
+function transformBox(obj) {
+  return obj.getBoundingRect(true, true);
+}
+
+function tfRounding(v) {
+  return Math.round(v * 100) / 100;
+}
+
+/* Le panneau ne doit pas se réécrire sous les doigts de l'utilisateur :
+   remplacer la valeur d'un champ pendant la frappe rend la saisie impossible. */
+function tfBusy() {
+  const a = document.activeElement;
+  return !!(a && a.closest && a.closest('#transformSection'));
+}
+
+function syncTransformPanel(force) {
+  const section = $('transformSection');
+  if (!section) return;
+  const obj = canvas.getActiveObject();
+  if (!obj) { section.hidden = true; return; }
+  section.hidden = false;
+  if (tfBusy() && !force) return;
+  const box = transformBox(obj);
+  const ox = Number(state.artboardX) || 0;
+  const oy = Number(state.artboardY) || 0;
+  const put = (id, v) => { const el = $(id); if (el && el.value !== v) el.value = v; };
+  put('tfX', tfRounding(box.left - ox));
+  put('tfY', tfRounding(box.top - oy));
+  put('tfW', Math.max(0, tfRounding(box.width)));
+  put('tfH', Math.max(0, tfRounding(box.height)));
+  put('tfAngle', tfRounding(obj.angle || 0));
+}
+
+/* Applique une cote. `before` est mesuré AVANT mutation : les coordonnées
+   d'un objet tourné ne se déduisent pas de sa boîte, elles se comparent. */
+function tfApply(prop, value) {
+  const obj = canvas.getActiveObject();
+  if (!obj || !Number.isFinite(value)) return;
+  const before = transformBox(obj);
+  const ratioOn = !!($('tfRatio') && $('tfRatio').checked);
+  const ox = Number(state.artboardX) || 0;
+  const oy = Number(state.artboardY) || 0;
+
+  beginPropChange();
+  if (prop === 'x' || prop === 'y') {
+    const dx = prop === 'x' ? (value + ox) - before.left : 0;
+    const dy = prop === 'y' ? (value + oy) - before.top : 0;
+    obj.set({ left: (obj.left || 0) + dx, top: (obj.top || 0) + dy });
+  } else if (prop === 'angle') {
+    obj.set({ angle: value });
+  } else if (prop === 'w' || prop === 'h') {
+    if (before.width < 0.01 || before.height < 0.01) return;
+    const k = Math.max(0.01, value) / (prop === 'w' ? before.width : before.height);
+    obj.set({
+      scaleX: (obj.scaleX || 1) * k,
+      scaleY: (obj.scaleY || 1) * (ratioOn ? k : 1)
+    });
+  }
+  obj.setCoords();
+  /* Redimensionner ne doit pas déplacer : on remet le coin haut-gauche de la
+     boîte là où il était. Sans cela, changer L d'une forme tournée la faisait
+     glisser, parce que Fabric met à l'échelle depuis l'origine locale. */
+  if (prop === 'w' || prop === 'h') {
+    const after = transformBox(obj);
+    obj.set({
+      left: (obj.left || 0) + (before.left - after.left),
+      top: (obj.top || 0) + (before.top - after.top)
+    });
+    obj.setCoords();
+  }
+  canvas.requestRenderAll();
+  setDirty(true);
+  syncTransformPanel(true);
+}
+
+function bindTransform() {
+  const section = $('transformSection');
+  if (!section) return;
+  TF_FIELDS.forEach(([id, prop]) => {
+    const node = $(id);
+    if (!node) return;
+    node.addEventListener('change', () => tfApply(prop, parseFloat(node.value)));
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); syncTransformPanel(true); node.blur(); }
+      // Sans cela, taper « 4 » puis « 5 » dans une scène déclencherait les
+      // raccourcis d'outils (V, R, T…) : les flèches partent au canvas.
+      e.stopPropagation();
+    });
+  });
+}
+
 function onSelection() {
   const obj = canvas.getActiveObject();
   // Sélectionner un objet et un plan sont deux choses exclusives : l'une
   // efface l'autre, sinon le clavier ne sait plus sur quoi il agit.
-  if (obj && state.artboardSelected) {
-    state.artboardSelected = false;
-    document.body.classList.remove('artboard-selected');
-    syncArtboardReadout();
-    canvas.requestRenderAll();
-  }
+  if (obj && state.artboardSelected) selectArtboard(false);
   updateGroupingUI();
+  syncTransformPanel(true);
   if (!obj) {
     els.textProps.hidden = true;
     $('shapeProps').hidden = true;
@@ -2278,9 +2399,11 @@ function setZoom(z) {
 
 function centerView() {
   const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+  const ox = Number(state.artboardX) || 0;
+  const oy = Number(state.artboardY) || 0;
   canvas.setViewportTransform([vpt[0], 0, 0, vpt[3],
-    (canvas.getWidth() - state.artboardW * vpt[0]) / 2,
-    (canvas.getHeight() - state.artboardH * vpt[3]) / 2]);
+    (canvas.getWidth() - state.artboardW * vpt[0]) / 2 - ox * vpt[0],
+    (canvas.getHeight() - state.artboardH * vpt[3]) / 2 - oy * vpt[3]]);
   canvas.requestRenderAll();
   updateZoomUI();
 }
@@ -2918,6 +3041,23 @@ function bindProps() {
     const [w, h] = els.artboardSize.value.split('x').map(Number);
     if (w && h) setArtboardSize(w, h);
   });
+
+  // ── Plan de travail : position, fonds perdus, actions ──
+  const artX = $('artboardX'), artY = $('artboardY'), artBleed = $('artboardBleed');
+  if (artX) artX.addEventListener('change', () => setArtboardPosition(parseFloat(artX.value), state.artboardY));
+  if (artY) artY.addEventListener('change', () => setArtboardPosition(state.artboardX, parseFloat(artY.value)));
+  if (artBleed) artBleed.addEventListener('change', () => setArtboardBleed(artBleed.value));
+  [artX, artY, artBleed].forEach((node) => {
+    if (!node) return;
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); node.blur(); }
+      e.stopPropagation();
+    });
+  });
+  const artDup = $('artboardDuplicate');
+  if (artDup) artDup.addEventListener('click', duplicatePage);
+  const artDel = $('artboardDelete');
+  if (artDel) artDel.addEventListener('click', () => deletePage(state.activePage));
   $('btnClear').addEventListener('click', clearAll);
 
   // ── Dégradé ──
@@ -3988,6 +4128,15 @@ function bindExportModal() {
     }
     if ($('exportPagesPick') && !$('exportPagesPick').value) $('exportPagesPick').placeholder = 'tous';
     if ($('exportDocs')) $('exportDocs').value = 'active';
+    /* Les fonds perdus sont une propriété du PLAN : le sélecteur d'export
+       s'ouvre donc sur la valeur du plan, sans l'imposer. L'imprimeur qui
+       demande 3 mm une fois pour toutes garde la main. */
+    const planBleed = Math.max(0, Number(state.artboardBleed) || 0);
+    if ($('exportBleed')) {
+      const sel = $('exportBleed');
+      const has = Array.prototype.some.call(sel.options, (o) => Number(o.value) === planBleed);
+      if (has) { sel.value = String(planBleed); state.pdfxBleed = planBleed; }
+    }
     modal.hidden = false;
     syncExportUI();
   };
@@ -4794,8 +4943,8 @@ function centerOnArtboard(axis) {
   const maxX = Math.max(...boxes.map(b => b.left + b.width));
   const minY = Math.min(...boxes.map(b => b.top));
   const maxY = Math.max(...boxes.map(b => b.top + b.height));
-  const dx = state.artboardW / 2 - (minX + maxX) / 2;
-  const dy = state.artboardH / 2 - (minY + maxY) / 2;
+  const dx = (Number(state.artboardX) || 0) + state.artboardW / 2 - (minX + maxX) / 2;
+  const dy = (Number(state.artboardY) || 0) + state.artboardH / 2 - (minY + maxY) / 2;
 
   pushUndo('Alignement plan de travail');
   objs.forEach(o => {
@@ -5198,13 +5347,20 @@ function newPageId() {
   return 'p' + Date.now().toString(36) + '-' + pageSeq;
 }
 
-function createPage(name, w, h, color) {
+function createPage(name, w, h, color, bleed) {
   return {
     id: newPageId(),
     name: name || 'Plan ' + (state.pages.length + 1),
     w: w || state.artboardW,
     h: h || state.artboardH,
     color: color !== undefined ? color : state.artboardColor,
+    /* `ox`/`oy` : position de la planche sur le marbre. `bleed` : fonds
+       perdus, mémorisés avec le plan puisque c'est une propriété du plan de
+       travail, pas de l'export. Les deux valent 0 par défaut, donc un ancien
+       document s'ouvre exactement comme avant. */
+    ox: 0,
+    oy: 0,
+    bleed: Math.max(0, Number(bleed) || Number(state.artboardBleed) || 0),
     json: null            // null = ce plan est celui qui est sur le canvas
   };
 }
@@ -5223,9 +5379,11 @@ function activePage() {
 function artboardGeometry() {
   const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const ox = Number(state.artboardX) || 0;
+  const oy = Number(state.artboardY) || 0;
   return {
-    left: vpt[4],
-    top: vpt[5],
+    left: ox * vpt[0] + vpt[4],
+    top: oy * vpt[3] + vpt[5],
     width: state.artboardW * vpt[0],
     height: state.artboardH * vpt[3],
     index: state.activePage,
@@ -5271,6 +5429,8 @@ function selectArtboard(on) {
     });
   }
   document.body.classList.toggle('artboard-selected', on);
+  const actions = $('artboardActions');
+  if (actions) actions.hidden = !on;
   syncArtboardReadout();
   if (changed) canvas.requestRenderAll();
 }
@@ -5285,6 +5445,84 @@ function syncArtboardReadout() {
   box.textContent = state.artboardSelected
     ? 'Plan « ' + name + ' » sélectionné · ' + Math.round(state.artboardW) + ' × ' + Math.round(state.artboardH) + ' px'
     : 'Format du plan « ' + name + ' » · ' + Math.round(state.artboardW) + ' × ' + Math.round(state.artboardH) + ' px';
+  syncArtboardFields();
+}
+
+/* ════════════════════════════════════════════════════════════
+   DÉPLACER / SUPPRIMER LE PLAN DE TRAVAIL
+   ────────────────────────────────────────────────────────────
+   Déplacer la PLANCHE ne déplace pas le dessin : c'est le geste
+   d'Illustrator, et c'est le seul qui garde son sens quand le plan est
+   une découpe sur un marbre infini. Les cotes X/Y sont celles du bord
+   haut-gauche du plan, dans le repère du document.
+════════════════════════════════════════════════════════════ */
+function setArtboardPosition(x, y, opts) {
+  opts = opts || {};
+  const nx = Number.isFinite(Number(x)) ? Number(x) : (Number(state.artboardX) || 0);
+  const ny = Number.isFinite(Number(y)) ? Number(y) : (Number(state.artboardY) || 0);
+  state.artboardX = opts.round === false ? nx : Math.round(nx);
+  state.artboardY = opts.round === false ? ny : Math.round(ny);
+  canvas.__plume.artX = state.artboardX;
+  canvas.__plume.artY = state.artboardY;
+  const page = activePage();
+  if (page) { page.ox = state.artboardX; page.oy = state.artboardY; }
+  canvas.requestRenderAll();
+  syncArtboardFields();
+  if (!opts.silent) setDirty(true);
+}
+
+function setArtboardBleed(value) {
+  const v = Math.max(0, Math.min(200, Math.round(Number(value) || 0)));
+  state.artboardBleed = v;
+  canvas.__plume.artBleed = v;
+  const page = activePage();
+  if (page) page.bleed = v;
+  syncArtboardFields();
+  setDirty(true);
+}
+
+/* Glisser le cadre ou le cartouche du plan. On n'entame PAS la sélection
+   Fabric : le plan n'est pas un objet du document, il est peint à part. */
+let _artDrag = null;
+
+function startArtboardDrag(e) {
+  _artDrag = {
+    x: e.clientX,
+    y: e.clientY,
+    ox: Number(state.artboardX) || 0,
+    oy: Number(state.artboardY) || 0,
+    moved: false
+  };
+  window.addEventListener('pointermove', onArtboardDrag);
+  window.addEventListener('pointerup', endArtboardDrag, { once: true });
+}
+
+function onArtboardDrag(e) {
+  if (!_artDrag) return;
+  const dxs = e.clientX - _artDrag.x;
+  const dys = e.clientY - _artDrag.y;
+  if (!_artDrag.moved && Math.abs(dxs) + Math.abs(dys) < 2) return;
+  _artDrag.moved = true;
+  const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+  setArtboardPosition(
+    _artDrag.ox + dxs / (vpt[0] || 1),
+    _artDrag.oy + dys / (vpt[3] || 1),
+    { silent: true }
+  );
+}
+
+function endArtboardDrag() {
+  window.removeEventListener('pointermove', onArtboardDrag);
+  if (_artDrag && _artDrag.moved) setDirty(true);
+  _artDrag = null;
+}
+
+/* ← ↑ ↓ → déplacent le plan quand il est sélectionné, comme les objets. */
+function nudgeArtboard(key, amount) {
+  const step = amount || 1;
+  const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
+  const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
+  setArtboardPosition((Number(state.artboardX) || 0) + dx, (Number(state.artboardY) || 0) + dy);
 }
 
 /* Écrit l'état du canvas dans le plan actif. */
@@ -5294,6 +5532,9 @@ function flushActivePage() {
   page.w = state.artboardW;
   page.h = state.artboardH;
   page.color = state.artboardColor;
+  page.ox = Number(state.artboardX) || 0;
+  page.oy = Number(state.artboardY) || 0;
+  page.bleed = Math.max(0, Number(state.artboardBleed) || 0);
   page.json = canvasJSON();
 }
 
@@ -5317,11 +5558,26 @@ function applyPageArtboard(page) {
   state.artboardW = page.w;
   state.artboardH = page.h;
   state.artboardColor = page.color;
+  state.artboardX = Number(page.ox) || 0;
+  state.artboardY = Number(page.oy) || 0;
+  state.artboardBleed = Math.max(0, Number(page.bleed) || 0);
   canvas.__plume.artW = page.w;
   canvas.__plume.artH = page.h;
   canvas.__plume.artColor = page.color;
+  canvas.__plume.artX = state.artboardX;
+  canvas.__plume.artY = state.artboardY;
+  canvas.__plume.artBleed = state.artboardBleed;
   canvas.backgroundColor = '';
   if ($('artboardColor')) $('artboardColor').value = page.color === 'transparent' ? '#ffffff' : page.color;
+  syncArtboardFields();
+}
+
+/* Les champs du panneau Document qui décrivent le plan affiché. */
+function syncArtboardFields() {
+  const bx = $('artboardX'), by = $('artboardY'), bl = $('artboardBleed');
+  if (bx && document.activeElement !== bx) bx.value = Math.round(Number(state.artboardX) || 0);
+  if (by && document.activeElement !== by) by.value = Math.round(Number(state.artboardY) || 0);
+  if (bl && document.activeElement !== bl) bl.value = Math.round(Number(state.artboardBleed) || 0);
 }
 
 /* Installe un plan sur le canvas (échange bas niveau, sans vue ni toast).
@@ -5338,8 +5594,10 @@ async function loadPageIntoCanvas(index) {
   await loadJSON(page.json || { version: '5.1.0', objects: [], background: '' });
   page.json = null;                 // c'est de nouveau le plan vivant
   restorePageHistory(page.id);
-  state.artboardSelected = false;
-  document.body.classList.remove('artboard-selected');
+  // `selectArtboard(false)` plutôt que les deux lignes équivalentes : c'est
+  // lui qui masque aussi les actions du plan, et deux endroits qui recopient
+  // un état finissent toujours par diverger.
+  selectArtboard(false);
   renderLayers();
   renderPages();
   updateUI();
@@ -5372,31 +5630,45 @@ function duplicatePage() {
   flushActivePage();
   const source = activePage();
   if (!source) return;
-  const copy = createPage(source.name + ' copie', source.w, source.h, source.color);
+  const copy = createPage(source.name + ' copie', source.w, source.h, source.color, source.bleed);
+  copy.ox = Number(source.ox) || 0;
+  copy.oy = Number(source.oy) || 0;
   copy.json = JSON.parse(JSON.stringify(source.json || { version: '5.1.0', objects: [] }));
   const at = state.activePage + 1;
   state.pages.splice(at, 0, copy);
   renderPages();
+  renderDocTabs();
   gotoPage(at, { force: true });
   setDirty(true);
   toast('Plan dupliqué');
 }
 
+/* Ajoute un plan de travail DANS LE DOCUMENT COURANT, juste après celui qui
+   est affiché. L'ancien code empilait à la fin de la liste : le nouveau plan
+   apparaissait à l'autre bout, et le compteur de l'onglet n'était pas rafraîchi
+   — on croyait avoir changé de document. */
 function addPage(name) {
   flushActivePage();
   stashPageHistory();
+  const template = activePage();
+  const page = createPage(name, template ? template.w : state.artboardW,
+    template ? template.h : state.artboardH,
+    template ? template.color : state.artboardColor,
+    template ? template.bleed : state.artboardBleed);
+  const at = state.activePage + 1;
+  state.pages.splice(at, 0, page);
+  state.activePage = at;
   loadJSON({ version: '5.1.0', objects: [], background: '' });
-  state.pages.push(createPage(name));
-  state.activePage = state.pages.length - 1;
   resetStacks();
-  applyPageArtboard(activePage());
+  applyPageArtboard(page);
   renderLayers();
   renderPages();
+  renderDocTabs();
   updateUI();
   requestAnimationFrame(() => { resizeCanvas(); fitView(); });
   setDirty(true);
-  toast('Plan « ' + activePage().name + ' » ajouté');
-  return activePage();
+  toast('Plan « ' + page.name + ' » ajouté');
+  return page;
 }
 
 async function deletePage(index) {
@@ -5421,6 +5693,7 @@ async function deletePage(index) {
     requestAnimationFrame(() => { resizeCanvas(); fitView(); });
   }
   renderPages();
+  renderDocTabs();
   setDirty(true);
   toast('Plan supprimé');
 }
@@ -5432,6 +5705,7 @@ function renamePage(index, name) {
   if (!clean) return;
   page.name = clean;
   renderPages();
+  renderDocTabs();
   setDirty(true);
 }
 
@@ -5445,6 +5719,7 @@ function movePage(index, delta) {
   else if (state.activePage === target) state.activePage = index;
   activePage().json = null;
   renderPages();
+  renderDocTabs();
   setDirty(true);
 }
 
@@ -5455,6 +5730,9 @@ function applyPageList(pages, active) {
     w: Number(p.w) || 800,
     h: Number(p.h) || 600,
     color: p.color || '#ffffff',
+    ox: Number(p.ox) || 0,
+    oy: Number(p.oy) || 0,
+    bleed: Math.max(0, Number(p.bleed) || 0),
     json: p.json || null
   }));
   state.activePage = Math.max(0, Math.min(state.pages.length - 1, Number(active) || 0));
@@ -5631,6 +5909,9 @@ function flushActiveDocument() {
   doc.artboardW = state.artboardW;
   doc.artboardH = state.artboardH;
   doc.artboardColor = state.artboardColor;
+  doc.artboardX = Number(state.artboardX) || 0;
+  doc.artboardY = Number(state.artboardY) || 0;
+  doc.artboardBleed = Math.max(0, Number(state.artboardBleed) || 0);
   doc.view = {
     showGrid: state.showGrid,
     gridSize: state.gridSize,
@@ -5659,8 +5940,7 @@ async function installDocument(doc) {
   await loadJSON(page.json || { version: '5.1.0', objects: [], background: '' });
   page.json = null;
   restorePageHistory(page.id);
-  state.artboardSelected = false;
-  document.body.classList.remove('artboard-selected');
+  selectArtboard(false);
   renderLayers();
   renderPages();
   renderDocTabs();
@@ -6021,6 +6301,9 @@ function serializePages(doc, isActive) {
       w: live ? state.artboardW : p.w,
       h: live ? state.artboardH : p.h,
       color: live ? state.artboardColor : p.color,
+      ox: live ? (Number(state.artboardX) || 0) : (Number(p.ox) || 0),
+      oy: live ? (Number(state.artboardY) || 0) : (Number(p.oy) || 0),
+      bleed: live ? (Math.max(0, Number(state.artboardBleed) || 0)) : (Math.max(0, Number(p.bleed) || 0)),
       json: live ? canvasJSON() : p.json
     };
   });
@@ -6091,6 +6374,9 @@ function applyProjectPayload(payload) {
       w: p.w,
       h: p.h,
       color: p.color,
+      ox: Number(p.ox) || 0,
+      oy: Number(p.oy) || 0,
+      bleed: Math.max(0, Number(p.bleed) || 0),
       json: i === active ? null : p.json
     }));
     state.pages = pages;
@@ -6125,6 +6411,9 @@ function applyProjectPayload(payload) {
     w: state.artboardW,
     h: state.artboardH,
     color: state.artboardColor,
+    ox: Number(state.artboardX) || 0,
+    oy: Number(state.artboardY) || 0,
+    bleed: Math.max(0, Number(state.artboardBleed) || 0),
     json: null
   }];
   state.activePage = 0;
@@ -6189,6 +6478,9 @@ function normalizeProjectPayload(data) {
         w: Math.min(50000, Math.max(1, Number(p.w) || width)),
         h: Math.min(50000, Math.max(1, Number(p.h) || height)),
         color: p.color === 'transparent' ? 'transparent' : (p.color || artboard.color),
+        ox: Number(p.ox) || 0,
+        oy: Number(p.oy) || 0,
+        bleed: Math.max(0, Number(p.bleed) || 0),
         json: p.json
       }));
     if (!pages.length) pages = null;
@@ -6225,6 +6517,9 @@ function normalizeDocuments(wrapped, artboard) {
         w: Math.min(50000, Math.max(1, Number(p.w) || Number(doc.w) || artboard.w)),
         h: Math.min(50000, Math.max(1, Number(p.h) || Number(doc.h) || artboard.h)),
         color: p.color === 'transparent' ? 'transparent' : (p.color || artboard.color),
+        ox: Number(p.ox) || 0,
+        oy: Number(p.oy) || 0,
+        bleed: Math.max(0, Number(p.bleed) || 0),
         json: p.json
       }));
     if (!pages.length) return;
@@ -6380,7 +6675,8 @@ function exportBounds(scope) {
     };
   }
   return {
-    left: 0, top: 0,
+    left: Number(state.artboardX) || 0,
+    top: Number(state.artboardY) || 0,
     width: Math.max(1, Math.round(state.artboardW)),
     height: Math.max(1, Math.round(state.artboardH)),
     selected: null
@@ -6524,9 +6820,14 @@ async function runExport(opts) {
 
     canvas._renderBackground = function (ctx) {
       if (!bgColor) return;
+      /* `_renderBackground` est appelé AVANT que la transformation de vue ne
+         soit appliquée : `toDataURL({left, top})` a déjà replié le cadrage
+         dans `viewportTransform`, qui ne concerne que les objets. Remplir à
+         partir de `bounds.left` décalait donc le fond une seconde fois —
+         invisible tant que le plan était en (0,0), faux dès qu'on le déplace. */
       ctx.save();
       ctx.fillStyle = bgColor;
-      ctx.fillRect(bounds.left, bounds.top, bounds.width, bounds.height);
+      ctx.fillRect(0, 0, this.getWidth(), this.getHeight());
       ctx.restore();
     };
     const dataURL = (function () {
@@ -6599,7 +6900,11 @@ async function exportPDFX(opts, download, base) {
   const page = activePage();
   const width = Math.max(1, Math.round(state.artboardW));
   const height = Math.max(1, Math.round(state.artboardH));
-  const bleedPx = Math.max(0, Number(opts.bleed) || 0);
+  const artLeft = Number(state.artboardX) || 0;
+  const artTop = Number(state.artboardY) || 0;
+  // Fonds perdus : la valeur du plan de travail sert de défaut, l'option
+  // d'export reste prioritaire (un imprimeur peut demander 3 mm une fois).
+  const bleedPx = Math.max(0, Number(opts.bleed) || Number(state.artboardBleed) || 0);
   const warnings = [];
 
   // ── 1. Texte → courbes (aucune police à embarquer) ──
@@ -6615,7 +6920,9 @@ async function exportPDFX(opts, download, base) {
   // ── 2. Fabric → Paper → entrées PDF, dans l'ordre d'empilement ──
   const items = [];
   const images = [];
-  const flipY = [1, 0, 0, -1, 0, height];
+  /* Repère PDF : Y vers le haut, origine au coin haut-gauche du PLAN.
+     Le plan pouvant être déplacé sur le marbre, on retire son origine. */
+  const flipY = [1, 0, 0, -1, -artLeft, height + artTop];
 
   for (const entry of entries) {
     const objects = entry.paths && entry.paths.length ? entry.paths : [entry.source];
@@ -7296,6 +7603,8 @@ function bindKeyboard() {
         return;
       }
       e.preventDefault();
+      // Plan sélectionné : la touche supprime le plan, pas un objet.
+      if (state.artboardSelected && !canvas.getActiveObject()) { deletePage(state.activePage); return; }
       deleteSelection();
       return;
     }
@@ -7306,7 +7615,10 @@ function bindKeyboard() {
     }
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
       e.preventDefault();
-      nudgeSelection(e.key, e.shiftKey ? 10 : 1);
+      // Le plan sélectionné se déplace au clavier ; sinon c'est la sélection
+      // d'objets qui bouge. Les deux ne peuvent pas être actifs ensemble.
+      if (state.artboardSelected && !canvas.getActiveObject()) nudgeArtboard(e.key, e.shiftKey ? 10 : 1);
+      else nudgeSelection(e.key, e.shiftKey ? 10 : 1);
       return;
     }
 
@@ -7745,12 +8057,14 @@ function snapMovingObject(o) {
   const bb = o.getBoundingRect(true, true);
   const xs = [bb.left, bb.left + bb.width / 2, bb.left + bb.width];
   const ys = [bb.top, bb.top + bb.height / 2, bb.top + bb.height];
-  const xCandidates = [0, state.artboardW / 2, state.artboardW];
-  const yCandidates = [0, state.artboardH / 2, state.artboardH];
+  const ax = Number(state.artboardX) || 0;
+  const ay = Number(state.artboardY) || 0;
+  const xCandidates = [ax, ax + state.artboardW / 2, ax + state.artboardW];
+  const yCandidates = [ay, ay + state.artboardH / 2, ay + state.artboardH];
   state.guides.forEach(g => { if (g.axis === 'x') xCandidates.push(g.pos); else yCandidates.push(g.pos); });
   if (state.showGrid && state.gridSize > 0) {
-    for (let x = 0; x <= state.artboardW; x += state.gridSize) xCandidates.push(x);
-    for (let y = 0; y <= state.artboardH; y += state.gridSize) yCandidates.push(y);
+    for (let x = ax; x <= ax + state.artboardW; x += state.gridSize) xCandidates.push(x);
+    for (let y = ay; y <= ay + state.artboardH; y += state.gridSize) yCandidates.push(y);
   }
   canvas.getObjects().forEach(other => {
     if (other === o || !other.visible) return;
@@ -7853,7 +8167,7 @@ if (typeof ResizeObserver === 'function') {
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.6.1',
+  version: '2.7.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },
@@ -7925,7 +8239,8 @@ window.Bird = {
   },
   pages: {
     list: () => state.pages.map((p, i) => ({
-      index: i, id: p.id, name: p.name, width: p.w, height: p.h, active: i === state.activePage
+      index: i, id: p.id, name: p.name, width: p.w, height: p.h, active: i === state.activePage,
+      x: Number(p.ox) || 0, y: Number(p.oy) || 0, bleed: Math.max(0, Number(p.bleed) || 0)
     })),
     active: () => state.activePage,
     count: () => state.pages.length,
@@ -7934,7 +8249,10 @@ window.Bird = {
     duplicate: duplicatePage,
     remove: (index) => deletePage(index),
     rename: (index, name) => renamePage(index, name),
-    move: (index, delta) => movePage(index, delta)
+    move: (index, delta) => movePage(index, delta),
+    /* Position du plan sur le marbre et fonds perdus du plan affiché. */
+    moveOnWorkspace: (x, y) => setArtboardPosition(x, y),
+    bleed: (px) => { if (px !== undefined) setArtboardBleed(px); return state.artboardBleed; }
   },
   io: {
     importSVG: (text, point) => importSVGText(text, point),

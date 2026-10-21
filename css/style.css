@@ -73,7 +73,11 @@
   /* Le plan de travail est peint au CANVAS : les variables ci-dessus ne
      l'atteignent pas. Ces quatre-là sont lues en JS (themeColor) puis passées
      au contexte 2D. En clair, elles valent le littéral d'origine. */
-  --canvas-bg: #ffffff;
+  /* Le MARBRE (hors plan) est légèrement gris : le plan de travail est blanc,
+     et sans cet écart une planche déplacée était invisible — on ne voyait
+     bouger que son cadre en pointillé. C'est l'écart qu'Illustrator et Figma
+     utilisent, et il reste monochrome. */
+  --canvas-bg: #f2f2f2;
   --canvas-frame: rgba(26, 26, 26, .22);
   --ruler-bg: #fbfbfb;
   --ruler-tick: #cfcfcf;
@@ -832,6 +836,43 @@ input[type="range"]::-webkit-slider-thumb {
   font: inherit; font-size: 10px; letter-spacing: 0.4px;
 }
 
+/* ── Transformation : couples (libellé, valeur) sur deux colonnes.
+   Monochrome strict comme le reste du panneau : aucune couleur d'accent,
+   l'état actif se lit au contraste. ── */
+.tf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 6px;
+  margin-bottom: 9px;
+}
+.tf-cell {
+  display: flex; align-items: center; gap: 4px;
+  min-width: 0; height: 26px;
+  padding: 0 5px;
+  background: var(--n01);
+  border: 1px solid var(--n21);
+  border-radius: 3px;
+  cursor: text;
+}
+.tf-cell:focus-within { border-color: var(--n44); }
+.tf-cell > span {
+  flex: 0 0 auto; min-width: 9px;
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--n38);
+}
+.tf-cell > input {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  height: 24px; padding: 0;
+  background: transparent; border: 0; outline: 0;
+  font: inherit; font-size: 10.5px; color: var(--n44);
+  font-variant-numeric: tabular-nums;
+  /* Les flèches natives volent 14 px sur une cellule de 26 : on les masque,
+     ↑/↓ restent actifs au clavier. */
+  -moz-appearance: textfield; appearance: textfield;
+}
+.tf-cell > input::-webkit-outer-spin-button,
+.tf-cell > input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 /* ── Pinceau vectoriel ── */
 .brush-presets {
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
@@ -1360,6 +1401,11 @@ input[type="range"]::-webkit-slider-thumb {
    de panneau, sinon le widget hérite d'espacements prévus pour 250 px fixes. */
 .sp-widget-body .props-section.is-floating,
 .props-section.is-floating { padding: 0; margin: 0; border: 0; background: none; }
+/* Détachée ≠ invisible. `is-detached` sert à retirer la section du panneau
+   (display:none) ; une fois DANS la carte flottante elle doit s'afficher.
+   Sans cette remise en `block`, la règle du panneau l'emportait et le widget
+   s'ouvrait vide : la carte apparaissait, ses fonctions non. */
+.sp-widget-body .props-section.is-floating { display: block; }
 .sp-widget-body .props-section.is-floating > .section-head { display: none; }
 .sp-widget-body .props-section.is-floating > .section-note { margin-top: 0; }
 
