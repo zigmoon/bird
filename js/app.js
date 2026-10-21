@@ -6703,7 +6703,7 @@ if (typeof ResizeObserver === 'function') {
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.4.0',
+  version: '2.5.0',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

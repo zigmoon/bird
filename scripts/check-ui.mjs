@@ -28,6 +28,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -365,6 +366,136 @@ function checkDefaultToolsOff() {
   }
 }
 
+/* ── 8. Aucune plaque blanche sous une icône ─────────────────
+   Les icônes de Bird portaient un carré blanc arrondi : 91 % de blanc,
+   2 % de transparence (les coins), marges nulles. Sur un onglet clair la
+   marque disparaissait, et le système ne pouvait pas appliquer sa propre
+   forme. SuperPrint (8 % de marge), SuperPhoto et PDF-YZ (2–10 %) posent
+   la marque sur du transparent.
+
+   Le critère est le pixel du BORD SUPÉRIEUR AU CENTRE : avec une plaque,
+   il est opaque (même arrondie, cette zone est à l'intérieur) ; sans
+   plaque, il est transparent. Un simple contrôle du coin ne suffisait
+   pas — un carré à coins arrondis a justement un coin transparent. */
+function checkIconPlates() {
+  /* Lecture PNG minimale : zlib est le seul outil nécessaire, et il est
+     intégré à Node. On n'inflate qu'une fois et on ne dé-filtre que les
+     premières lignes, ce qui suffit pour lire le bord haut. */
+  const topRow = (file) => {
+    const b = fs.readFileSync(file);
+    if (b.length < 26 || b.readUInt32BE(0) !== 0x89504e47) return null;
+    const w = b.readUInt32BE(16);
+    const colorType = b[25];
+    const ch = colorType === 6 ? 4 : colorType === 2 ? 3 : colorType === 0 ? 1 : 4;
+    const rowsNeeded = 2;
+    let off = 8;
+    const idat = [];
+    while (off + 8 <= b.length) {
+      const len = b.readUInt32BE(off);
+      const type = b.toString('ascii', off + 4, off + 8);
+      if (type === 'IDAT') idat.push(b.subarray(off + 8, off + 8 + len));
+      if (type === 'IEND') break;
+      off += 12 + len;
+    }
+    if (!idat.length) return null;
+    const raw = zlib.inflateSync(Buffer.concat(idat));
+    const stride = w * ch;
+    const out = Buffer.alloc(rowsNeeded * stride);
+    let pos = 0;
+    for (let y = 0; y < rowsNeeded; y++) {
+      const filter = raw[pos++];
+      const line = raw.subarray(pos, pos + stride);
+      pos += stride;
+      const prev = y > 0 ? out.subarray((y - 1) * stride, y * stride) : Buffer.alloc(stride);
+      const cur = out.subarray(y * stride, (y + 1) * stride);
+      for (let x = 0; x < stride; x++) {
+        const a = x >= ch ? cur[x - ch] : 0;
+        const bb = prev[x];
+        const c = x >= ch ? prev[x - ch] : 0;
+        let v = line[x];
+        if (filter === 1) v += a;
+        else if (filter === 2) v += bb;
+        else if (filter === 3) v += (a + bb) >> 1;
+        else if (filter === 4) {
+          const p = a + bb - c;
+          const pa = Math.abs(p - a), pb = Math.abs(p - bb), pc = Math.abs(p - c);
+          v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? bb : c);
+        }
+        cur[x] = v & 0xff;
+      }
+    }
+    const at = (x, y) => {
+      const i = (y * w + x) * ch;
+      return { r: out[i], g: out[i + 1], b: out[i + 2], a: ch === 4 ? out[i + 3] : 255 };
+    };
+    return { w, ch, at };
+  };
+
+  const iconDirs = ['icons', path.join('desktop', 'src-tauri', 'icons')];
+  for (const dir of iconDirs) {
+    const full = path.join(root, dir);
+    if (!fs.existsSync(full)) continue;
+    for (const name of fs.readdirSync(full)) {
+      if (!name.endsWith('.png')) continue;
+      const rel = path.join(dir, name).replace(/\\/g, '/');
+      let info;
+      try { info = topRow(path.join(full, name)); }
+      catch (e) { errors.push(`${rel} — PNG illisible : ${e.message}`); continue; }
+      if (!info) { errors.push(`${rel} — ce n’est pas un PNG`); continue; }
+      if (info.ch !== 4) {
+        errors.push(
+          `${rel} — PNG sans canal alpha (canaux : ${info.ch})\n` +
+          '    Une icône doit pouvoir être posée sur n’importe quel fond.'
+        );
+        continue;
+      }
+      const edge = info.at(Math.round(info.w / 2), 1);
+      if (edge.a > 16) {
+        errors.push(
+          `${rel} — le bord supérieur est opaque (rgba ${edge.r},${edge.g},${edge.b},${edge.a})\n` +
+          '    C’est une plaque de fond. La marque doit être posée sur du transparent,\n' +
+          '    avec une marge, comme dans SuperPrint, SuperPhoto et PDF-YZ.'
+        );
+      }
+    }
+  }
+
+  // Le favicon SVG ne doit pas porter de rectangle couvrant tout le cadre.
+  const favicon = path.join(root, 'icons', 'favicon.svg');
+  if (fs.existsSync(favicon)) {
+    const svg = fs.readFileSync(favicon, 'utf8');
+    const viewBox = svg.match(/viewBox="([^"]+)"/);
+    const box = viewBox ? viewBox[1].trim().split(/[\s,]+/).map(Number) : null;
+    for (const m of svg.matchAll(/<rect\b[^>]*>/g)) {
+      const tag = m[0];
+      const num = (attr) => {
+        // Limite de mot obligatoire : sans elle `x` matchait le `x` de
+        // `rx="16"`, la marge des coins arrondis, et le rectangle passait
+        // pour décalé alors qu'il couvrait tout le cadre.
+        const a = tag.match(new RegExp('(?:^|\\s)' + attr + '="([\\d.]+)"'));
+        return a ? Number(a[1]) : null;
+      };
+      // groupe 2 : la couleur seule (le groupe 1 englobe tout l'attribut).
+      const fillMatch = tag.match(/fill="(#[0-9a-fA-F]{3,8}|white)"/);
+      if (!fillMatch) continue;
+      const fill = fillMatch[1];
+      const isWhite = /^#f{3,8}$/i.test(fill) || fill.toLowerCase() === 'white';
+      if (!isWhite) continue;
+      // pleine page : couvre le viewBox (ou n'a ni x/y ni width/height, donc 100 %)
+      const x = num('x') || 0, y = num('y') || 0;
+      const w = num('width'), h = num('height');
+      const full = box && w !== null && h !== null &&
+        x <= box[0] && y <= box[1] && x + w >= box[0] + box[2] && y + h >= box[1] + box[3];
+      if (full) {
+        errors.push(
+          'icons/favicon.svg — un rectangle blanc couvre tout le cadre\n' +
+          '    C’est une plaque de fond : la marque doit être posée sur du transparent.'
+        );
+      }
+    }
+  }
+}
+
 checkIconColours();
 checkWhiteIcons();
 checkReferences();
@@ -372,6 +503,7 @@ checkMonochrome();
 checkTranslationSource();
 checkVersionConsistency();
 checkDefaultToolsOff();
+checkIconPlates();
 
 if (errors.length) {
   console.error('\n✗ Contrôles d’interface : ' + errors.length + ' problème(s)\n');
@@ -379,5 +511,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut');
+console.log('✓ Contrôles d’interface OK : couleurs d’icônes, DA monochrome, icônes « white », références d’assets, source des traductions, cohérence des versions, outils inactifs par défaut, aucune plaque sous les icônes');
 for (const n of notes) console.log('  · ' + n);

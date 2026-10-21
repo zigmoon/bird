@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Bird">
-  <rect width="100" height="100" rx="16" fill="#FFFFFF"/>
-  <g transform="translate(12,14.42) scale(0.1505)">
+  <!-- Aucune plaque de fond : la marque est posée sur du transparent, comme
+       dans SuperPrint, SuperPhoto et PDF-YZ. Une plaque blanche rendait
+       l'icône invisible sur fond clair et débordait dans les coins arrondis
+       du système. Marge de 8 % sur l'axe fort, centrage sur l'autre. -->
+  <g transform="translate(8.000,10.661) scale(0.166337)">
+
   <path fill="#1A1A1A" d="M318.1,225.2l-28.5-7c-4.9-32.3-32.8-57.1-66.5-57.1c-0.1,0-0.1,0-0.2,0c-21.8,0.1-42.3,10.7-54.9,28.6
 						L7.1,405.3h12h141.6c8.5,0,16.8-0.8,24.8-2.4c0,0,9.7-1.7,9.5-2.2c54.8-15.1,95.3-65.4,95.3-125V242l27.8-7.4
 						c2.2-0.6,3.6-2.5,3.6-4.8C321.8,227.7,320.2,225.8,318.1,225.2z"/>

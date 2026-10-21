@@ -233,7 +233,7 @@ button { cursor: pointer; }
   font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--n44);
 }
-.startup-logo img { width: 44px; height: 44px; border-radius: 9px; }
+.startup-logo img { width: 44px; height: 44px; }
 .startup-title {
   margin: 0; font-size: 17px; font-weight: 700;
   letter-spacing: 0.04em; line-height: 1.25; color: var(--n44);
@@ -1767,11 +1767,12 @@ html[data-theme="dark"] .guide-temp { background: #1a1a1a; }
 html[data-theme="dark"] .guide-label,
 html[data-theme="dark"] .guide-tip { background: #1a1a1a; color: #ffffff; }
 
-/* Aperçu du plan vide : il flotte sur la zone de travail, pas sur le papier —
-   il suit donc le thème comme le reste de l'interface (var(--n44) s'inverse). */
-
 /* Images : un SVG chargé par <img> ne reçoit pas currentColor, ses tracés sont
-   donc noirs par défaut. On les inverse pour qu'ils suivent le thème. */
+   donc noirs par défaut. On les inverse pour qu'ils suivent le thème.
+   Les icônes sont désormais posées sur du transparent (aucune plaque) : un
+   inversement transforme les tracés sombres en tracés clairs et les
+   remplissages blancs en remplissages sombres, ce qui est exactement le
+   rendu attendu d'un dessin au trait sur fond sombre. */
 html[data-theme="dark"] .brand .logo,
 html[data-theme="dark"] .splash-logo-big,
 html[data-theme="dark"] .startup-logo img,

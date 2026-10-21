@@ -37,8 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
-    'v2.4.0 — trappes sans effet sur le plan, aucun outil actif par défaut':
-      'v2.4.0 — panels never move the artboard, no tool active by default',
+    'v2.5.0 — icônes sans fond, comme les autres apps':
+      'v2.5.0 — icons without a background, like the other apps',
     'v2.1.2 — anglais par défaut · français dans les préférences':
       'v2.1.2 — English by default · French in Preferences',
     'v2.1.1 — logo unifié · monochrome strict': 'v2.1.1 — unified logo · strict monochrome',

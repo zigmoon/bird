@@ -392,6 +392,39 @@ redimensionnement de canvas par frame, et entre deux frames la règle est plus
 courte que la scène — un vide visible. Elle s’ouvre d’un coup, la mesure est donc
 exacte immédiatement.
 
+### Icônes : jamais de fond
+
+Chaque icône — favicon, icônes PWA, `.ico`/`.icns` du bureau — est la marque sur
+un canevas **transparent**, avec une marge. Pas de carré blanc arrondi derrière.
+C’est ainsi que sont dessinés SuperPrint, SuperPhoto et PDF-YZ, et c’est ce qui
+permet à une icône de tenir sur un onglet clair, un onglet sombre et le masque de
+forme du système :
+
+| Application | Transparent | Marges |
+|---|---|---|
+| SuperPrint | 31 % | 8 % partout |
+| SuperPhoto | 45 % | 10 % / 2 % |
+| PDF-YZ | 45 % | 9 % / 2 % |
+| Bird | 77 % | 9 % / 22 % |
+
+Les marges diffèrent parce que la marque Bird mesure 505 × 361 : la contrainte
+est la largeur — 84 % du côté, centré — ce qui laisse 22 % en haut et en bas.
+
+`scripts/check-ui.mjs` lit le pixel du **bord supérieur centré** de chaque PNG :
+avec un fond il est opaque (même arrondi, ce pixel est à l’intérieur du fond),
+sans fond il est transparent. Un test sur le coin ne marcherait pas — un carré
+arrondi a un coin transparent, et c’est précisément comme ça que les anciennes
+icônes sont passées inaperçues. Le SVG du favicon, lui, est contrôlé pour un
+`<rect>` blanc pleine frame.
+
+L’icône PWA `maskable` est un **fichier séparé** (`icons/icon-maskable-512.png`,
+marge 20 %) : la zone sûre d’Android est un cercle de 80 % de diamètre, et les
+ailes de l’icône principale y seraient rognées.
+
+En thème sombre les icônes sont inversées (`filter: invert(1)`). Sur un tracé
+transparent, cela rend les traits sombres clairs et les aplats blancs sombres —
+le rendu correct pour une interface claire sur fond sombre.
+
 ### Thème jour / nuit
 
 Le bouton lune / soleil, à gauche des *Préférences*, bascule le thème ; le choix
@@ -710,7 +743,7 @@ Deux espaces de coordonnées, et les mélanger ne fait aucun bruit :
 
 ### Invariants d’interface, vérifiés avant chaque build
 
-`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode cinq
+`node scripts/check-ui.mjs` (lancé en CI avant le build Astro) encode huit
 régressions déjà livrées, invisibles côté code et évidentes côté utilisateur :
 
 | Contrôle | Le bug qu’il empêche |
@@ -720,9 +753,12 @@ régressions déjà livrées, invisibles côté code et évidentes côté utilis
 | Un fichier nommé `*white*` doit contenir du blanc | `bird-mark-white.svg` contenait `#0C0C0F`, exactement la couleur du panneau du splash derrière lui |
 | Tout asset référencé doit exister | Un paquet de déploiement pouvait omettre `css/fonts/` ; les `@font-face` échouaient en silence et la page retombait sur une police système |
 | Aucun module n’appelle `BirdI18n.t()` | un module écrivait un libellé traduit dans le DOM ; i18n le relisait comme une écriture de l’application et le figeait comme source — « Apparence » restait « Appearance » après un retour au français |
+| Un seul numéro de version, partout | un remplacement global `2.3.0 → 2.3.1` dans `Cargo.lock` a poussé six crates `icu_*` vers une version inexistante ; les quatre builds de bureau ont échoué |
+| Aucun outil d’affichage actif par défaut | règles et magnétisme étaient actifs au premier rendu : un document neuf s’ouvrait sur un plan encombré |
+| Aucun fond derrière une icône | l’icône était un carré blanc arrondi, seule parmi SuperPrint, SuperPhoto et PDF-YZ — elle disparaissait sur une barre d’onglets claire |
 
 Une exception légitime s’écrit `check-ui:allow <raison>` (ou `i18n:allow
-<raison>` pour le dernier) sur la même ligne.
+<raison>` pour la traduction) sur la même ligne.
 
 ### Cache : la règle à ne pas oublier
 

@@ -361,6 +361,37 @@ The panel's width is deliberately **not animated**: animating it means one
 canvas resize per frame, and between two frames the ruler is shorter than the
 stage — a visible gap. It snaps, so the measurement is exact immediately.
 
+### Icons: no plate, ever
+
+Every icon — favicon, PWA icons, desktop `.ico`/`.icns` — is the mark on a
+**transparent** canvas, with a margin. No white rounded square. That is how
+SuperPrint, SuperPhoto and PDF-YZ are drawn, and it is what makes an icon
+survive a light tab, a dark tab and the system's own shape mask:
+
+| App | Transparent | Margins |
+|---|---|---|
+| SuperPrint | 31 % | 8 % all round |
+| SuperPhoto | 45 % | 10 % / 2 % |
+| PDF-YZ | 45 % | 9 % / 2 % |
+| Bird | 77 % | 9 % / 22 % |
+
+The margins differ because Bird's mark is 505 × 361: the constraint is the
+width — 84 % of the side, centred — which leaves 22 % above and below.
+
+`scripts/check-ui.mjs` reads the top-centre pixel of every PNG: with a plate it
+is opaque (even with rounded corners, that pixel sits inside the plate), without
+a plate it is transparent. A corner check would not do — a rounded square has a
+transparent corner, which is exactly how the old icons went unnoticed. The
+favicon SVG is checked for a full-frame white `<rect>`.
+
+The `maskable` PWA icon is a **separate file** (`icons/icon-maskable-512.png`,
+20 % margin): the Android safe zone is a circle of 80 % diameter, and the main
+icon's wings would be clipped by it.
+
+In dark mode icons are inverted (`filter: invert(1)`). On transparent line art
+that turns dark strokes light and white fills dark — the correct rendering for a
+light-on-dark interface.
+
 ### Day / night theme
 
 The moon/sun button left of *Preferences* switches theme; the choice is stored
@@ -685,7 +716,7 @@ Two coordinate spaces, and mixing them is silent:
 
 ### UI invariants, checked before every build
 
-`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes five
+`node scripts/check-ui.mjs` (run in CI before the Astro build) encodes eight
 regressions that already shipped, each invisible to the developer and obvious to
 the user:
 
@@ -696,9 +727,12 @@ the user:
 | A file named `*white*` must contain white | `bird-mark-white.svg` contained `#0C0C0F` — the exact colour of the splash panel behind it |
 | Every referenced asset must exist | A deployment package could omit `css/fonts/`; the `@font-face` rules then failed silently and the page fell back to a system font |
 | No module may call `BirdI18n.t()` | a module wrote a translated label into the DOM; i18n read it back as a fresh write and froze it as the source — "Apparence" stayed "Appearance" after switching back to French |
+| One version number, everywhere | a global `2.3.0 → 2.3.1` replacement in `Cargo.lock` bumped six unrelated `icu_*` crates to a version that does not exist; all four desktop builds failed |
+| No display tool active by default | rulers and snapping were on at first paint, so a new document opened on a crowded artboard |
+| No background plate on any icon | the icon was a white rounded square, alone among SuperPrint, SuperPhoto and PDF-YZ — it disappeared on a light tab bar |
 
 A legitimate exception is written as `check-ui:allow <reason>` (or
-`i18n:allow <reason>` for the last one) on the same line.
+`i18n:allow <reason>` for the translation one) on the same line.
 
 ### Caching — the rule that keeps getting forgotten
 
