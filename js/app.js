@@ -54,6 +54,11 @@ const state = {
   artboardX: 0,
   artboardY: 0,
   artboardBleed: 0,
+  /* L'indication du plan vide (logo + raccourcis) ne s'affiche qu'à la
+     première ouverture : le premier geste la fait disparaître pour de bon.
+     Sans ce drapeau, `updateHint()` la faisait revenir dès que la scène
+     redevenait vide (suppression du dernier objet, par exemple). */
+  hintDismissed: false,
   dirty: false,
 
   // outil plume
@@ -125,7 +130,8 @@ const state = {
   activeDoc: 0,
   /* Le cadre du plan est-il « sélectionné » (clic sur son numéro) ? C'est une
      sélection d'un autre genre que celle des objets : elle ne porte pas de
-     poignées et ne se déplace pas, elle ouvre le format du plan. */
+     poignées, ouvre le format du plan et permet de le déplacer sur le marbre
+     (glisser le numéro ou le cadre). */
   artboardSelected: false,
   /* Vrai pendant un export : les annotations de l'interface (numéro de plan,
      cadre de sélection) ne doivent pas se retrouver dans le fichier produit. */
@@ -520,6 +526,8 @@ function resetDocument() {
   state.activeDoc = 0;
   pageHistory.clear();
   selectArtboard(false);
+  /* Un document neuf retrouve son indication de prise en main. */
+  state.hintDismissed = false;
   state.dirty = false;
   setDirty(false);
   projectPath = null;
@@ -678,6 +686,8 @@ function syncShapeMenuActive(tool) {
 }
 
 function setTool(tool) {
+  // Choisir un outil est déjà un geste de travail : l'aide du plan vide s'efface.
+  dismissHint();
   if (state.tool === 'pen') endPen(true);
   if (state.tool === 'pencil' || state.tool === 'brush') stopPencil();
   if (state.tool === 'hand') stopPan();
@@ -728,6 +738,17 @@ function setTool(tool) {
 function bindCanvas() {
   canvas.upperCanvasEl.addEventListener('contextmenu', openCanvasContextMenu);
 
+  /* ── Premier geste dans l'éditeur : l'indication du plan vide s'efface ──
+     Le logo gris et les raccourcis ne sont qu'une aide de premier lancement ;
+     ils ne doivent pas rester au milieu de l'écran dès qu'on travaille. Ni le
+     splash ni le pop-in de démarrage ne comptent : leur clic ne prouve pas que
+     l'utilisateur a vu le plan de travail. */
+  document.addEventListener('pointerdown', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('#splashScreen, #startupOverlay, .modal-overlay')) return;
+    dismissHint();
+  }, true);
+
   /* ── Numéro du plan de travail : clic = sélection du plan ──
      En phase de CAPTURE, avant Fabric : un clic sur le badge ne doit pas
      amorcer un rectangle de sélection sur la scène vide. Le badge et le cadre
@@ -738,19 +759,33 @@ function bindCanvas() {
      objet qui déborde du plan reste toujours cliquable, sinon le bord du
      plan volerait le clic sur les 7 px de tolérance. */
   canvas.upperCanvasEl.addEventListener('mousedown', (e) => {
-    if (e.button !== 0 || state.spaceDown || state.penActive || state.panning) return;
+    if (e.button !== 0 || state.spaceDown || state.panning) return;
     const where = artboardHitTest(e);
     if (!where) {
       if (state.artboardSelected && state.tool === 'select') selectArtboard(false);
+      dismissHint();
       return;
     }
     e.preventDefault();
-    e.stopPropagation();
+    /* `stopImmediatePropagation` et pas `stopPropagation` : les écouteurs de
+       Fabric sont sur le MÊME élément, et la propagation normale ne les
+       arrête pas. Sans cela, Fabric démarrait un rectangle de sélection sous
+       la poignée — deux gestes pour un seul clic. */
+    e.stopImmediatePropagation();
+    dismissHint();
     selectArtboard(true);
     // Le cadre et le cartouche servent aussi de poignée : c'est la seule
     // façon de placer la planche sur le marbre.
     startArtboardDrag(e);
   }, true);
+
+  /* ── Curseur « déplacer » sur la poignée du plan ──
+     Sans lui, rien n'indique que le numéro et le bord du cadre se glissent :
+     on clique, on sélectionne, et le plan semble immobile. */
+  canvas.upperCanvasEl.addEventListener('mousemove', (e) => {
+    if (_artDrag) return;
+    setArtboardCursor(artboardHitTest(e) ? 'move' : null);
+  });
 
   /* ── Option + glisser : dupliquer la sélection ──
      Le clonage doit avoir lieu AVANT que Fabric n'installe sa transformation,
@@ -5325,8 +5360,20 @@ function setArtboardSize(w, h) {
 
 function updateHint() {
   const count = canvas.getObjects().length;
-  els.hint.style.opacity = count ? '0' : '1';
-  els.hint.style.pointerEvents = count ? 'none' : 'none';
+  const show = !count && !state.hintDismissed;
+  els.hint.style.opacity = show ? '1' : '0';
+  els.hint.style.pointerEvents = 'none';
+  els.hint.setAttribute('aria-hidden', show ? 'false' : 'true');
+}
+
+/* Le premier geste dans l'éditeur efface l'indication du plan vide, même si
+   rien n'a encore été dessiné : elle ne doit pas rester au milieu de l'écran
+   pendant qu'on travaille. Définitif pour le document courant — un nouveau
+   document la retrouve. */
+function dismissHint() {
+  if (state.hintDismissed) return;
+  state.hintDismissed = true;
+  updateHint();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -5396,9 +5443,15 @@ function artboardGeometry() {
   };
 }
 
-/* 'badge' | 'frame' | null — voir js/artboards.js pour la géométrie. */
+/* 'badge' | 'frame' | null — voir js/artboards.js pour la géométrie.
+   La poignée reste active quel que soit l'outil choisi : sinon, dessiner avec
+   un outil de forme puis vouloir déplacer le plan devenait impossible alors
+   que le cartouche restait visible. Trois gestes gardent la priorité :
+   l'Espace et la Main (panoramique) et un tracé Plume en cours. */
 function artboardHitTest(domEvent) {
-  if (!window.BirdArtboards || state.tool !== 'select') return null;
+  if (!window.BirdArtboards) return null;
+  if (state.spaceDown || state.panning || state.tool === 'hand') return null;
+  if (state.penActive && state.penPoints.length) return null;
   const geo = artboardGeometry();
   const p = canvasPointFromEvent(domEvent);
   const where = BirdArtboards.hitTest(geo, p.x, p.y);
@@ -5484,6 +5537,23 @@ function setArtboardBleed(value) {
 /* Glisser le cadre ou le cartouche du plan. On n'entame PAS la sélection
    Fabric : le plan n'est pas un objet du document, il est peint à part. */
 let _artDrag = null;
+let _artCursor = false;
+
+/* Curseur propre à la poignée. On ne touche jamais au curseur de Fabric :
+   `_artCursor` retient qu'on l'a emprunté, et on le rend tel quel ensuite. */
+function setArtboardCursor(mode) {
+  const el = canvas && canvas.upperCanvasEl;
+  if (!el) return;
+  if (mode) {
+    el.style.cursor = mode;
+    _artCursor = true;
+    return;
+  }
+  if (!_artCursor) return;
+  _artCursor = false;
+  el.style.cursor = '';
+  canvas.defaultCursor && canvas.setCursor(canvas.defaultCursor);
+}
 
 function startArtboardDrag(e) {
   _artDrag = {
@@ -5493,8 +5563,14 @@ function startArtboardDrag(e) {
     oy: Number(state.artboardY) || 0,
     moved: false
   };
-  window.addEventListener('pointermove', onArtboardDrag);
-  window.addEventListener('pointerup', endArtboardDrag, { once: true });
+  /* Écoute en CAPTURE sur window : le glisser survit à une sortie du canvas
+     (le curseur passe sur la barre haute, la règle, le panneau) et aucun
+     écouteur intermédiaire ne peut l'interrompre en stoppant la propagation. */
+  window.addEventListener('pointermove', onArtboardDrag, true);
+  window.addEventListener('pointerup', endArtboardDrag, true);
+  window.addEventListener('pointercancel', endArtboardDrag, true);
+  window.addEventListener('blur', endArtboardDrag);
+  setArtboardCursor('grabbing');
 }
 
 function onArtboardDrag(e) {
@@ -5512,9 +5588,13 @@ function onArtboardDrag(e) {
 }
 
 function endArtboardDrag() {
-  window.removeEventListener('pointermove', onArtboardDrag);
+  window.removeEventListener('pointermove', onArtboardDrag, true);
+  window.removeEventListener('pointerup', endArtboardDrag, true);
+  window.removeEventListener('pointercancel', endArtboardDrag, true);
+  window.removeEventListener('blur', endArtboardDrag);
   if (_artDrag && _artDrag.moved) setDirty(true);
   _artDrag = null;
+  setArtboardCursor(null);
 }
 
 /* ← ↑ ↓ → déplacent le plan quand il est sélectionné, comme les objets. */
@@ -5971,6 +6051,10 @@ async function switchDocument(index, opts) {
 
 async function addDocument(name, w, h, color) {
   if (state.activeDoc >= 0 && state.docs[state.activeDoc]) flushActiveDocument();
+
+  /* Un document neuf rouvre l'aide de premier lancement : les deux branches
+     ci-dessous passent par `installDocument()`, qui rappelle `updateUI()`. */
+  state.hintDismissed = false;
 
   /* « Nouveau document » sur une toile vierge ne doit pas empiler un onglet
      vide de plus : on réutilise l'onglet courant. Deux onglets dont aucun ne
@@ -7563,6 +7647,8 @@ function bindKeyboard() {
   document.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+    // Un raccourci est un geste de travail : l'aide du plan vide disparaît.
+    dismissHint();
     const cmd = e.metaKey || e.ctrlKey;
 
     if (e.code === 'Space' && !e.repeat) {
@@ -8167,7 +8253,7 @@ if (typeof ResizeObserver === 'function') {
 let nativeInfo = null;
 
 window.Bird = {
-  version: '2.7.0',
+  version: '2.7.1',
   get canvas() { return canvas; },
   state,
   tools: { set: setTool, current: () => state.tool },

@@ -186,9 +186,13 @@ artboard lives in it, the others are serialised.
 - **Move it.** Drag the frame or the number: the artboard slides over the
   workspace and the artwork does not move with it — the gesture Illustrator
   users expect, and the only one that makes sense when the artboard is a crop
-  on an infinite surface. `X` / `Y` in the Document panel set the exact
-  position; arrow keys nudge it (10 px with `Shift`). The workspace is a shade
-  greyer than the sheet, so the sheet is visible wherever you put it.
+  on an infinite surface. The handle stays live **whatever tool is selected**
+  (Space and the Hand tool keep panning, an in-progress Pen path keeps the
+  click), the cursor turns to `move` on hover, and the drag survives leaving the
+  canvas: you can release over a ruler or the panel. `X` / `Y` in the Document
+  panel set the exact position; arrow keys nudge it (10 px with `Shift`). The
+  workspace is a shade greyer than the sheet, so the sheet is visible wherever
+  you put it.
 - **Bleed** is an artboard property (0–200 px), stored with the artboard and
   used as the default in the export dialog. A printer asking for 3 mm once can
   still override it at export time.
@@ -209,6 +213,11 @@ artboard lives in it, the others are serialised.
 - Saved in the `.plume` project as `pages[]` + `activePage`, with `ox`, `oy` and
   `bleed` per artboard (all defaulting to 0); older single-page projects open as
   a one-artboard document.
+- **The first-run hint** (grey logo and shortcut reminder, centred on screen) is
+  only there before the first gesture. A click in the workspace, picking a tool,
+  a keyboard shortcut or a dropped file removes it — and it **does not come
+  back** when the canvas becomes empty again (last object deleted).
+  `updateHint()` only restores it for a brand-new document.
 
 The number's colours are swapped in dark mode: a black cartouche on a dark canvas
 would simply not exist.

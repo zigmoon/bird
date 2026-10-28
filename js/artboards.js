@@ -22,6 +22,7 @@
 var BADGE_W = 24;
 var BADGE_H = 18;
 var BADGE_GAP = 5;      // écart entre le badge et le coin du cadre
+var BADGE_HIT_PAD = 5;  // marge de clic autour du badge : la cible est petite
 var FRAME_HIT = 7;      // tolérance de clic sur le cadre, en px CSS
 
 var INK = '#1a1a1a';
@@ -138,8 +139,8 @@ function drawCorners(ctx, geo, pal) {
 function hitTest(geo, x, y) {
   if (!geo || !geo.width || !geo.height) return null;
   var box = badgeRectFor(geo, String((geo.index | 0) + 1));
-  if (x >= box.x - 2 && x <= box.x + box.width + 2 &&
-      y >= box.y - 2 && y <= box.y + box.height + 2) return 'badge';
+  if (x >= box.x - BADGE_HIT_PAD && x <= box.x + box.width + BADGE_HIT_PAD &&
+      y >= box.y - BADGE_HIT_PAD && y <= box.y + box.height + BADGE_HIT_PAD) return 'badge';
 
   var left = geo.left, top = geo.top;
   var right = geo.left + geo.width, bottom = geo.top + geo.height;

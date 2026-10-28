@@ -37,6 +37,8 @@
 'Éditeur vectoriel': 'Vector editor',
     'ATELIER VECTORIEL': 'VECTOR STUDIO',
     'LOCAL-FIRST VECTOR STUDIO': 'LOCAL-FIRST VECTOR STUDIO',
+    'v2.7.1 — plans déplaçables, aide de démarrage, glisser fiable':
+      'v2.7.1 — movable artboards, first-run hint, reliable dragging',
     'v2.7.0 — transformation, fonds perdus, panneaux détachables':
       'v2.7.0 — transform, bleed, detachable panels',
     'v2.6.1 — plans, documents, texte dans la forme':
